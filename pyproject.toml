@@ -1,6 +1,12 @@
 [project]
 name = "ditto"
 version = "0.1.0"
-description = "Server to render quotes from a Notion database to images"
+description = "Server to render quotes from a Notion database to images."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.8",
+    "loguru>=0.7.3",
+    "opencv-python>=4.11.0.86",
+    "pillow==11.1.0",
+    "uvicorn>=0.34.0",
+]
