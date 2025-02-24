@@ -4,7 +4,10 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 
 from ditto.utilities import wrap_text
-from ditto.constants import WIDTH, HEIGHT, PADDING, QUOTE_HEIGHT, AUTHOR_HEIGHT, TITLE_HEIGHT
+from ditto.constants import (WIDTH, HEIGHT, PADDING,
+                             QUOTE_HEIGHT, QUOTE_COLOR, QUOTE_FONT, QUOTE_FONT_INDEX,
+                             AUTHOR_HEIGHT, AUTHOR_COLOR, AUTHOR_FONT, AUTHOR_FONT_INDEX,
+                             TITLE_HEIGHT, TITLE_COLOR, TITLE_FONT, TITLE_FONT_INDEX)
 
 
 class DittoImage:
@@ -57,26 +60,26 @@ class DittoImage:
         width = WIDTH - (PADDING * 2)
         height = QUOTE_HEIGHT - (PADDING * 2)
 
-        font = ImageFont.truetype("Charter.ttc", index=3)
+        font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
         text, font = wrap_text.fit_text(quote, font, width, height)
 
         draw = ImageDraw.Draw(pil_image)
         xy = (PADDING, PADDING)
-        draw.text(xy, text, 'white', font=font, align="center")
+        draw.text(xy, text, QUOTE_COLOR, font=font, align="center")
 
         # Add Title
-        font = ImageFont.truetype("Charter.ttc", TITLE_HEIGHT, index=1)
+        font = ImageFont.truetype(TITLE_FONT, TITLE_HEIGHT, index=TITLE_FONT_INDEX)
         font = wrap_text.fit_text_width(title, font, width, max_font_size=TITLE_HEIGHT)
         xy = (WIDTH - PADDING, HEIGHT - PADDING - AUTHOR_HEIGHT)
-        draw.text(xy, title, 'white', font=font, anchor="rd")
+        draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd")
 
         # Add Author
         author = f'- {author}'
 
-        font = ImageFont.truetype("Charter.ttc", AUTHOR_HEIGHT, index=0)
+        font = ImageFont.truetype(AUTHOR_FONT, AUTHOR_HEIGHT, index=AUTHOR_FONT_INDEX)
         font = wrap_text.fit_text_width(author, font, width, max_font_size=AUTHOR_HEIGHT)
         xy = (WIDTH - PADDING, HEIGHT - PADDING)
-        draw.text(xy, author, 'white', font=font, anchor="rd")
+        draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd")
 
         # Convert back to cv2
         self.image = np.asarray(pil_image)
