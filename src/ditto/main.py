@@ -48,3 +48,14 @@ async def previous_endpoint(request: Request):
     response = await _process_quote(quote_item)
     logger.info(f'response: "{quote_item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
     return response
+
+
+@app.get("/random")
+async def random_endpoint(request: Request):
+    t = Timer()
+    logger.info(f"request: {request.method} {request.url}")
+
+    quote_item = await notion_db.get_random_item()
+    response = await _process_quote(quote_item)
+    logger.info(f'response: "{quote_item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
+    return response

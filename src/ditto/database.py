@@ -121,6 +121,7 @@ class NotionQuote:
 class NotionDatabaseManager:
     _id_cache = []
     _item_cache = {}
+    _last_id: str = None
 
     def __init__(self, database_id: str):
         self.database_id = database_id
@@ -160,6 +161,7 @@ class NotionDatabaseManager:
             self._id_cache.append(db_item['id'])
 
         random.shuffle(self._id_cache)
+        self._last_id = self._id_cache[-1]
         logger.info(f'Cache updated with {len(self._id_cache)} items')
 
     async def fetch_page(self, page_id: str) -> Optional[NotionQuote]:
@@ -213,6 +215,7 @@ class NotionDatabaseManager:
 
         page_id = self._id_cache.pop(0)
         self._id_cache.append(page_id)
+        self._last_id = page_id
         return await self.fetch_page(page_id)
 
     async def get_previous_item(self):
@@ -223,5 +226,28 @@ class NotionDatabaseManager:
         if not self._id_cache:
             raise NotionClientError('Unable to update cache')
 
-        page_id = self._id_cache[-1]
+        # If the previous item is at the front, send it to the back
+        if self._id_cache.index(self._last_id) == 0:
+            temp_item = self._id_cache.pop(0)
+            self._id_cache.append(temp_item)
+
+        page_id = self._id_cache.pop(0)
+        self._id_cache.append(page_id)
+        self._last_id = page_id
+        return await self.fetch_page(page_id)
+
+    async def get_random_item(self):
+        logger.info('Getting random item')
+        if not self._id_cache:
+            await self.update_id_cache()
+
+        if not self._id_cache:
+            raise NotionClientError('Unable to update cache')
+
+        page_id = random.choice(self._id_cache)
+        self._id_cache.remove(page_id)
+        self._id_cache.append(page_id)
+
+        self._last_id = page_id
+
         return await self.fetch_page(page_id)
