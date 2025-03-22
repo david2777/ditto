@@ -27,7 +27,11 @@ async def next_endpoint(request: Request):
     await item.process_image()
 
     logger.info(f'response: "{item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
-    return FileResponse(item.image_path_processed.as_posix(), media_type="image/jpeg")
+    response = FileResponse(item.image_path_processed.as_posix(), media_type="image/jpeg")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/previous")
@@ -39,4 +43,8 @@ async def previous_endpoint(request: Request):
     await item.process_image()
 
     logger.info(f'response: "{item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
-    return FileResponse(item.image_path_processed.as_posix(), media_type="image/jpeg")
+    response = FileResponse(item.image_path_processed.as_posix(), media_type="image/jpeg")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
