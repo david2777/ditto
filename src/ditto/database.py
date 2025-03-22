@@ -1,8 +1,9 @@
 import random
-import requests
 import asyncio
+import requests
 from pathlib import Path
-from typing import Optional, Callable
+from datetime import datetime
+from typing import Optional, Callable, Dict, List
 
 from notion_client import AsyncClient, APIResponseError
 from loguru import logger
@@ -60,18 +61,37 @@ async def api_request(api_func: Callable, *args, max_retries:int = 5, initial_ba
 
 
 class NotionQuote:
+    """Dataclass representing a single quote item from Notion.
+
+    Attributes:
+        page_id (str): The page ID for teh quote.
+        quote (str): The actual quote text.
+        title (str): The title of the book the quote belongs to.
+        author (str): The author of the book the quote belongs to.
+        image_expiry_time (Optional[datetime]): The expiry time of the image URL for internal files.
+        _image_url (Optional[str]): The first image URL in the page if the page has any image urls. Note that these URLs
+        expire and should be accessed via the `get_image_url` function which handles refreshing.
+
+    """
     page_id: str
     quote: str
     title: str
     author: str
-    image_url: Optional[str]
+    image_expiry_time: Optional[datetime]
+    _image_url: Optional[str]
 
-    def __init__(self, page_id: str, quote: str, title: str, author: str, image_url: Optional[str] = None):
-        self.page_id = page_id
-        self.quote = quote
-        self.title = title
-        self.author = author
-        self.image_url = image_url
+    def __init__(self, page: dict, image_block: Optional[dict] = None):
+        self.page_id = page['id']
+        self.quote = page['properties']['Name']['title'][0]['plain_text']
+        self.title = page['properties']['Title']['rich_text'][0]['plain_text']
+        self.author = page['properties']['Author']['rich_text'][0]['plain_text']
+        if image_block:
+            if image_block['type'] == 'file':
+                self._image_url = image_block['file']['url']
+                self.image_expiry_time = datetime.fromisoformat(image_block['file']['expiry_time'])
+            elif image_block['type'] == 'external':
+                self._image_url = image_block['file']['url']
+                self.image_expiry_time = None
         
     def __hash__(self):
         return hash(self.page_id)
@@ -79,35 +99,72 @@ class NotionQuote:
     def __repr__(self):
         return f'NotionQuote[{self.page_id}]'
 
+    async def get_image_url(self) -> Optional[str]:
+        """Returns the image URL handling refreshing the URL if the link has expired.
+
+        Returns:
+            Optional[str]: The image URL if one exists, None otherwise.
+        """
+        if self.image_expiry_time and datetime.now() < self.image_expiry_time:
+            image_block = await NotionDatabaseManager.fetch_image_block(self.page_id)
+            if image_block['type'] == 'file':
+                self._image_url = image_block['file']['url']
+                self.image_expiry_time = datetime.fromisoformat(image_block['file']['expiry_time'])
+            elif image_block['type'] == 'external':
+                self._image_url = image_block['file']['url']
+                self.image_expiry_time = None
+
+        return self._image_url
+
     @property
     def image_path_raw(self) -> Path:
+        """Returns the path for the "raw" unprocessed image on disk weather or not it exits.
+
+        Returns:
+            Path: The path for the "raw" unprocessed image on disk.
+        """
         return OUTPUT_DIR / 'raw' / f'{self.page_id}.jpg'
 
     @property
     def image_path_processed(self) -> Path:
+        """Returns the path for the processed image on disk weather or not it exits.
+
+        Returns:
+            Path: The path for the processed image on disk.
+        """
         return OUTPUT_DIR / 'processed' / f'{self.page_id}.jpg'
 
     async def download_image(self) -> bool:
-        if not self.image_url:
+        """Attempted to download the image from the image URL and store it as the raw image.
+
+        Returns:
+            bool: True if the image was downloaded, False otherwise.
+        """
+        image_url = await self.get_image_url()
+        if not image_url:
             return False
 
-        response = requests.get(self.image_url)
+        response = requests.get(image_url)
         if response.status_code == 200:
             self.image_path_raw.parent.mkdir(parents=True, exist_ok=True)
             with open(self.image_path_raw.as_posix(), "wb") as f:
                 f.write(response.content)
         return True
 
-    async def process_image(self) -> bool:
+    async def process_image(self):
+        """Processed the image and saved out the processed image. If an image does not exist, use a fallback image.
+
+        Returns:
+            None
+        """
         if self.image_path_processed.exists():
-            return True
+            return
 
         if not self.image_path_raw.is_file():
-            if self.image_url:
+            if self._image_url:
                 await self.download_image()
             else:
-                # TODO: Fallback Image
-                pass
+                raise NotImplementedError(f"Fallback Image Not Implemented")
 
         image = image_processing.DittoImage(self.image_path_raw.as_posix())
         image.initial_resize()
@@ -115,24 +172,49 @@ class NotionQuote:
         image.add_text(self.quote, self.title, self.author)
         self.image_path_processed.parent.mkdir(parents=True, exist_ok=True)
         image.write(self.image_path_processed.as_posix())
-        return True
 
 
 class NotionDatabaseManager:
-    _id_cache = []
-    _item_cache = {}
-    _last_id: str = None
+    """Simple Notion Database Manager which handles querying the database and caching results.
+
+    Attributes:
+        _page_id_cache (List[str]): An ordered list of page IDs. This list is scrambled on generation and then items are
+        pulled in order. Since Notion only returns 100 items at a time and has a rate limit of around 3 requests
+        per second it's better to cache a list of all possible page IDs.
+        _quote_item_cache (Dict[str, NotionQuote]): A cache of all quote items stored as {page_id: NotionQuote}. Items
+        are inserted into the cache every time the data is queried.
+        _last_id_returned (str): The last quote ID returned by any of the Get functions. Used for reverse traversal.
+
+    """
+    _page_id_cache: List[str] = []
+    _quote_item_cache: Dict[str, NotionQuote] = {}
+    _last_id_returned: str = None
 
     def __init__(self, database_id: str):
         self.database_id = database_id
 
-    def clear_id_cache(self):
-        self._id_cache.clear()
+    def clear_page_id_cache(self):
+        """Clear the page ID cache, forcing IDs ton be refreshed on the next query.
+
+        Returns:
+            None
+        """
+        self._page_id_cache.clear()
 
     def clear_item_cache(self):
-        self._item_cache.clear()
+        """Clear the item cache, forcing items to be re-generated starting on the next query.
 
-    async def update_id_cache(self):
+        Returns:
+            None
+        """
+        self._quote_item_cache.clear()
+
+    async def update_page_id_cache(self):
+        """Update the page ID cache by querying the database and caching results.
+
+        Returns:
+            None
+        """
         logger.info('Updating cache')
 
         try:
@@ -156,17 +238,43 @@ class NotionDatabaseManager:
             return
 
         logger.info('Clearing cache...')
-        self.clear_id_cache()
+        self.clear_page_id_cache()
         for db_item in results:
-            self._id_cache.append(db_item['id'])
+            self._page_id_cache.append(db_item['id'])
 
-        random.shuffle(self._id_cache)
-        self._last_id = self._id_cache[-1]
-        logger.info(f'Cache updated with {len(self._id_cache)} items')
+        random.shuffle(self._page_id_cache)
+        self._last_id_returned = self._page_id_cache[-1]
+        logger.info(f'Cache updated with {len(self._page_id_cache)} items')
+
+    @staticmethod
+    async def fetch_image_block(page_id: str) -> Optional[dict]:
+
+        try:
+            blocks = await api_request(notion_client.blocks.children.list, page_id)
+        except APIResponseError as error:
+            logger.exception(error)
+            blocks = {'results': []}
+
+        for block in blocks['results']:
+            block_type = block['type']
+            if block_type == 'image':
+                image_block = block['image']
+                return image_block
+
+        return None
+
 
     async def fetch_page(self, page_id: str) -> Optional[NotionQuote]:
+        """Fetch an individual page from the database and return its contents as a NotionQuote.
+
+        Args:
+            page_id (str): The ID of the page to fetch.
+
+        Returns:
+            Optional[NotionQuote]: An item from the database if found, None otherwise.
+        """
         try:
-            return self._item_cache[page_id]
+            return self._quote_item_cache[page_id]
         except KeyError:
             pass
 
@@ -176,78 +284,75 @@ class NotionDatabaseManager:
             logger.exception(error)
             return None
 
-        quote = page['properties']['Name']['title'][0]['plain_text']
-        title = page['properties']['Title']['rich_text'][0]['plain_text']
-        author = page['properties']['Author']['rich_text'][0]['plain_text']
-
         try:
-            blocks = await api_request(notion_client.blocks.children.list, page_id)
+            image_block = await self.fetch_image_block(page_id)
         except APIResponseError as error:
             logger.exception(error)
-            blocks = {'results': []}
-
-        image_url = None
-        for block in blocks['results']:
-            block_type = block['type']
-            if block_type == 'image':
-                image_block = block['image']
-                image_type = image_block['type']  # Can be "external" or "file"
-
-                if image_type == 'external':
-                    image_url = image_block['external']['url']
-                    logger.info(f'External Image URL: {image_url}')
-                elif image_type == 'file':
-                    image_url = image_block['file']['url']
-                    logger.info(f'File Image URL: {image_url}')
+            return None
 
         logger.info(f'Next item retrieved: {page_id}')
-        item = NotionQuote(page_id, quote, title, author, image_url)
-        self._item_cache[page_id] = item
+        item = NotionQuote(page, image_block)
+        self._quote_item_cache[page_id] = item
         return item
 
-    async def get_next_item(self):
-        logger.info('Getting next item')
-        if not self._id_cache:
-            await self.update_id_cache()
+    async def get_next_item(self) -> Optional[NotionQuote]:
+        """Return the next item from the database based on the page ID cache.
 
-        if not self._id_cache:
+        Returns:
+            Optional[NotionQuote]: The next item from the database if the cache exists, None otherwise.
+        """
+        logger.info('Getting next item')
+        if not self._page_id_cache:
+            await self.update_page_id_cache()
+
+        if not self._page_id_cache:
             raise NotionClientError('Unable to update cache')
 
-        page_id = self._id_cache.pop(0)
-        self._id_cache.append(page_id)
-        self._last_id = page_id
+        page_id = self._page_id_cache.pop(0)
+        self._page_id_cache.append(page_id)
+        self._last_id_returned = page_id
         return await self.fetch_page(page_id)
 
-    async def get_previous_item(self):
-        logger.info('Getting previous item')
-        if not self._id_cache:
-            await self.update_id_cache()
+    async def get_previous_item(self) -> Optional[NotionQuote]:
+        """Return the previous item from the database based on the page ID cache.
 
-        if not self._id_cache:
+        Returns:
+            Optional[NotionQuote]: The previous item from the database if the cache exists, None otherwise.
+        """
+        logger.info('Getting previous item')
+        if not self._page_id_cache:
+            await self.update_page_id_cache()
+
+        if not self._page_id_cache:
             raise NotionClientError('Unable to update cache')
 
         # If the previous item is at the front, send it to the back
-        if self._id_cache.index(self._last_id) == 0:
-            temp_item = self._id_cache.pop(0)
-            self._id_cache.append(temp_item)
+        if self._page_id_cache.index(self._last_id_returned) == 0:
+            temp_item = self._page_id_cache.pop(0)
+            self._page_id_cache.append(temp_item)
 
-        page_id = self._id_cache.pop(0)
-        self._id_cache.append(page_id)
-        self._last_id = page_id
+        page_id = self._page_id_cache.pop(0)
+        self._page_id_cache.append(page_id)
+        self._last_id_returned = page_id
         return await self.fetch_page(page_id)
 
-    async def get_random_item(self):
-        logger.info('Getting random item')
-        if not self._id_cache:
-            await self.update_id_cache()
+    async def get_random_item(self) -> Optional[NotionQuote]:
+        """Return a random item from the database based on the page ID cache.
 
-        if not self._id_cache:
+        Returns:
+            Optional[NotionQuote]: The random item from the database if the cache exists, None otherwise.
+        """
+        logger.info('Getting random item')
+        if not self._page_id_cache:
+            await self.update_page_id_cache()
+
+        if not self._page_id_cache:
             raise NotionClientError('Unable to update cache')
 
-        page_id = random.choice(self._id_cache)
-        self._id_cache.remove(page_id)
-        self._id_cache.append(page_id)
+        page_id = random.choice(self._page_id_cache)
+        self._page_id_cache.remove(page_id)
+        self._page_id_cache.append(page_id)
 
-        self._last_id = page_id
+        self._last_id_returned = page_id
 
         return await self.fetch_page(page_id)
