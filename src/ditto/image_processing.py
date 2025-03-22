@@ -81,5 +81,6 @@ class DittoImage:
         xy = (WIDTH - PADDING, HEIGHT - PADDING)
         draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd")
 
-        # Convert back to cv2
+        # Convert back to cv2 and back to BGR
         self.image = np.asarray(pil_image)
+        self.image = cv2.cvtColor(self.image, cv2.COLOR_RGB2BGR)
