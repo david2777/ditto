@@ -1,4 +1,4 @@
-import random
+from random import Random
 import asyncio
 import requests
 from enum import Enum
@@ -65,6 +65,90 @@ async def api_request(api_func: Callable, *args, max_retries:int = 5, initial_ba
 
     # If we've exhausted our retries, raise an error
     raise NotionClientError(f"Failed after {max_retries} retries due to rate limiting")
+
+
+class Client:
+    """Client class used to manage order and index in the quote list per client.
+
+    Attributes:
+        name (str): The name of the client.
+        _cache_size (int): The size of the page cache.
+        _index (int): The current position in the order list.
+        _page_indices (List[int]): A per-client shuffled list of indices to allow each client to return pages in their
+        own random order.
+        _random (Random): The random number generator to use, created per client instance. Allows random sorting to be
+        predictable.
+
+    """
+    name: str
+    _cache_size: int
+    _index: int = 0
+    _page_indices: List[int]
+    _random: Random
+
+    def __init__(self, name: str, cache_size: int):
+        """Initialize a new client instance based on the given name and cache size.
+
+        Args:
+            name (str): The name of the client.
+            cache_size (int): The size of the page cache.
+        """
+        self.name = name
+        self._cache_size = cache_size
+        self._random = Random()
+        self.update_cache_size(self._cache_size)
+
+    def update_cache_size(self, cache_size: int):
+        """Update the cache size, refreshing the indices list and updating the index.
+
+        Args:
+            cache_size (int): The size of the page cache.
+
+        Returns:
+            None
+        """
+        self._cache_size = cache_size
+        self._page_indices = list(range(cache_size))
+        self._random.shuffle(self._page_indices)
+        logger.info(f"Indices list: {self._page_indices}")
+        self._index = min(self._index, self._cache_size - 1)
+
+    def _move_index(self, direction: QueryDirection):
+        """Move the index in a given direction.
+
+        Args:
+            direction (QueryDirection): The direction to move.
+
+        Returns:
+            None
+        """
+        logger.info(f"Before {self._index}")
+        if direction == QueryDirection.FORWARD:
+            self._index += 1
+            if self._index > self._cache_size - 1:
+                self._index = 0
+        elif direction == QueryDirection.REVERSE:
+            self._index -= 1
+            if self._index < 0:
+                self._index = self._cache_size - 1
+        elif direction == QueryDirection.RANDOM:
+            self._index = self._random.randint(0, self._cache_size - 1)
+        else:
+            raise ValueError(f'Invalid direction: {direction}')
+        logger.info(f"After {self._index}")
+
+    def get_item_index(self, direction: QueryDirection) -> int:
+        """Return an index in the order list for the given direction, this index is used to pull a quote from the master
+        quote cache.
+
+        Args:
+            direction (QueryDirection): The direction to get the index for.
+
+        Returns:
+            int: The index in the order list for the given direction.
+        """
+        self._move_index(direction)
+        return self._page_indices[self._index]
 
 
 class NotionQuote:
@@ -189,12 +273,12 @@ class NotionDatabaseManager:
         a rate limit of around 3 requests per second it's better to cache a list of all possible page IDs.
         _quote_item_cache (Dict[str, NotionQuote]): A cache of all quote items stored as {page_id: NotionQuote}. Items
         are inserted into the cache every time the data is queried.
+        _clients (Dict[str, Client]): A cache of all clients stored as {client_name: Client}. Items
 
     """
     _page_id_cache: List[str] = []
-    _client_offsets: {str: int} = {}
-    _client_orders: {str: List[int]} = {}
     _quote_item_cache: Dict[str, NotionQuote] = {}
+    _clients: Dict[str, Client] = {}
 
     def __init__(self, database_id: str):
         self.database_id = database_id
@@ -249,27 +333,16 @@ class NotionDatabaseManager:
             self._page_id_cache.append(db_item['id'])
 
         new_count = len(self._page_id_cache)
+        client_count = 0
+        if new_count != previous_count:
+            for client in self._clients.values():
+                client_count += 1
+                client.update_cache_size(new_count)
 
-        if previous_count:
-            # If we have more new items than previously, insert them to each client in random order
-            if new_count > previous_count:
-                to_insert = list(range(previous_count, new_count))
-                for client in self._client_orders.keys():
-                    for i in to_insert:
-                        self._client_orders[client].insert(random.randint(0, previous_count - 1), i)
-
-            # If we have fewer items than previously, remove the extra items and update indices if needed
-            elif new_count < previous_count:
-                to_remove = set(list(range(previous_count))[new_count:])
-                for client in self._client_orders.keys():
-                    for i in to_remove:
-                        self._client_orders[client].remove(i)
-
-                for client, offset in self._client_offsets.values():
-                    if offset > new_count:
-                        self._client_offsets[client] = new_count
-
-        logger.info(f'Cache updated with {new_count} items')
+        if client_count:
+            logger.info(f'Cache and {client_count} clients updated with {new_count} items')
+        else:
+            logger.info(f'Cache updated with {new_count} items')
 
     @staticmethod
     async def fetch_image_block(page_id: str) -> Optional[dict]:
@@ -326,18 +399,18 @@ class NotionDatabaseManager:
         self._quote_item_cache[page_id] = item
         return item
 
-    async def _get_item(self, client: str, direction: QueryDirection) -> Optional[NotionQuote]:
+    async def _get_item(self, client_name: str, direction: QueryDirection) -> Optional[NotionQuote]:
         """Return an item from the database in the specified direction for the specified client. None if database is
         empty.
 
         Args:
-            client (str): The client host.
+            client_name (str): The client host name.
             direction (QueryDirection): The direction to fetch.
 
         Returns:
             Optional[NotionQuote]: An item from the database if found, None otherwise.
         """
-        logger.info(f'Getting {direction} item for {client}')
+        logger.info(f'Getting {direction} item for {client_name}')
 
         if not self._page_id_cache:
             await self.update_page_id_cache()
@@ -345,62 +418,46 @@ class NotionDatabaseManager:
         if not self._page_id_cache:
             raise NotionClientError('Unable to update cache')
 
-        if client not in self._client_offsets:
-            self._client_offsets[client] = 0
+        try:
+            client_instance = self._clients[client_name]
+        except KeyError:
+            client_instance = Client(client_name, len(self._page_id_cache))
+            self._clients[client_name] = client_instance
 
-        if client not in self._client_orders:
-            self._client_orders[client] = list(range(len(self._page_id_cache)))
-            random.shuffle(self._client_orders[client])
+        index = client_instance.get_item_index(direction)
 
-        if direction == QueryDirection.FORWARD:
-            self._client_offsets[client] += 1
-            if self._client_offsets[client] > len(self._page_id_cache) - 1:
-                self._client_offsets[client] = 0
-        elif direction == QueryDirection.REVERSE:
-            self._client_offsets[client] -= 1
-            if self._client_offsets[client] < 0:
-                self._client_offsets[client] = len(self._page_id_cache) - 1
-        elif direction == QueryDirection.RANDOM:
-            self._client_offsets[client] = random.randint(0, len(self._page_id_cache) - 1)
-        else:
-            raise ValueError(f'Invalid direction: {direction}')
-
-        logger.info(f'Orders: {self._client_orders[client]}, Offset: {self._client_offsets[client]}')
-
-        index = self._client_orders[client][self._client_offsets[client]]
-        logger.info(f'Index: {index} From Offset: {self._client_offsets[client]}')
         page_id = self._page_id_cache[index]
         return await self.fetch_page(page_id)
 
-    async def get_next_item(self, client: str) -> Optional[NotionQuote]:
+    async def get_next_item(self, client_name: str) -> Optional[NotionQuote]:
         """Return the next item from the database based on the page ID cache.
 
         Args:
-            client (str): The client host.
+            client_name (str): The client host name.
 
         Returns:
             Optional[NotionQuote]: The next item from the database if the cache exists, None otherwise.
         """
-        return await self._get_item(client, QueryDirection.FORWARD)
+        return await self._get_item(client_name, QueryDirection.FORWARD)
 
-    async def get_previous_item(self, client: str) -> Optional[NotionQuote]:
+    async def get_previous_item(self, client_name: str) -> Optional[NotionQuote]:
         """Return the previous item from the database based on the page ID cache.
 
         Args:
-            client (str): The client host.
+            client_name (str): The client host name.
 
         Returns:
             Optional[NotionQuote]: The previous item from the database if the cache exists, None otherwise.
         """
-        return await self._get_item(client, QueryDirection.REVERSE)
+        return await self._get_item(client_name, QueryDirection.REVERSE)
 
-    async def get_random_item(self, client: str) -> Optional[NotionQuote]:
+    async def get_random_item(self, client_name: str) -> Optional[NotionQuote]:
         """Return a random item from the database based on the page ID cache.
 
         Args:
-            client (str): The client host.
+            client_name (str): The client host name.
 
         Returns:
             Optional[NotionQuote]: The random item from the database if the cache exists, None otherwise.
         """
-        return await self._get_item(client, QueryDirection.RANDOM)
+        return await self._get_item(client_name, QueryDirection.RANDOM)
