@@ -1,9 +1,10 @@
 import random
 import asyncio
 import requests
+from enum import Enum
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Callable, Dict, List
+from typing import Optional, Callable, Dict, List, Set
 
 from notion_client import AsyncClient, APIResponseError
 from loguru import logger
@@ -14,6 +15,12 @@ OUTPUT_DIR = constants.OUTPUT_DIR or 'test_images/resize'
 OUTPUT_DIR = Path(OUTPUT_DIR).resolve()
 
 notion_client = AsyncClient(auth=secrets.NOTION_KEY)
+
+
+class QueryDirection(Enum):
+    FORWARD = 1
+    REVERSE = 2
+    RANDOM = 3
 
 
 class NotionClientError(RuntimeError):
@@ -178,17 +185,16 @@ class NotionDatabaseManager:
     """Simple Notion Database Manager which handles querying the database and caching results.
 
     Attributes:
-        _page_id_cache (List[str]): An ordered list of page IDs. This list is scrambled on generation and then items are
-        pulled in order. Since Notion only returns 100 items at a time and has a rate limit of around 3 requests
-        per second it's better to cache a list of all possible page IDs.
+        _page_id_cache (List[str]): An ordered list of page IDs. Since Notion only returns 100 items at a time and has
+        a rate limit of around 3 requests per second it's better to cache a list of all possible page IDs.
         _quote_item_cache (Dict[str, NotionQuote]): A cache of all quote items stored as {page_id: NotionQuote}. Items
         are inserted into the cache every time the data is queried.
-        _last_id_returned (str): The last quote ID returned by any of the Get functions. Used for reverse traversal.
 
     """
     _page_id_cache: List[str] = []
+    _client_offsets: {str: int} = {}
+    _client_orders: {str: List[int]} = {}
     _quote_item_cache: Dict[str, NotionQuote] = {}
-    _last_id_returned: str = None
 
     def __init__(self, database_id: str):
         self.database_id = database_id
@@ -237,18 +243,44 @@ class NotionDatabaseManager:
             logger.error(f'No results found for {self.database_id}')
             return
 
-        logger.info('Clearing cache...')
+        previous_count = len(self._page_id_cache)
         self.clear_page_id_cache()
         for db_item in results:
             self._page_id_cache.append(db_item['id'])
 
-        random.shuffle(self._page_id_cache)
-        self._last_id_returned = self._page_id_cache[-1]
-        logger.info(f'Cache updated with {len(self._page_id_cache)} items')
+        new_count = len(self._page_id_cache)
+
+        if previous_count:
+            # If we have more new items than previously, insert them to each client in random order
+            if new_count > previous_count:
+                to_insert = list(range(previous_count, new_count))
+                for client in self._client_orders.keys():
+                    for i in to_insert:
+                        self._client_orders[client].insert(random.randint(0, previous_count - 1), i)
+
+            # If we have fewer items than previously, remove the extra items and update indices if needed
+            elif new_count < previous_count:
+                to_remove = set(list(range(previous_count))[new_count:])
+                for client in self._client_orders.keys():
+                    for i in to_remove:
+                        self._client_orders[client].remove(i)
+
+                for client, offset in self._client_offsets.values():
+                    if offset > new_count:
+                        self._client_offsets[client] = new_count
+
+        logger.info(f'Cache updated with {new_count} items')
 
     @staticmethod
     async def fetch_image_block(page_id: str) -> Optional[dict]:
+        """Return the first image block from a page.
 
+        Args:
+            page_id (str): The page ID.
+
+        Returns:
+            Optional[dict]: The image block if one exists, None otherwise.
+        """
         try:
             blocks = await api_request(notion_client.blocks.children.list, page_id)
         except APIResponseError as error:
@@ -262,7 +294,6 @@ class NotionDatabaseManager:
                 return image_block
 
         return None
-
 
     async def fetch_page(self, page_id: str) -> Optional[NotionQuote]:
         """Fetch an individual page from the database and return its contents as a NotionQuote.
@@ -295,64 +326,81 @@ class NotionDatabaseManager:
         self._quote_item_cache[page_id] = item
         return item
 
-    async def get_next_item(self) -> Optional[NotionQuote]:
+    async def _get_item(self, client: str, direction: QueryDirection) -> Optional[NotionQuote]:
+        """Return an item from the database in the specified direction for the specified client. None if database is
+        empty.
+
+        Args:
+            client (str): The client host.
+            direction (QueryDirection): The direction to fetch.
+
+        Returns:
+            Optional[NotionQuote]: An item from the database if found, None otherwise.
+        """
+        logger.info(f'Getting {direction} item for {client}')
+
+        if not self._page_id_cache:
+            await self.update_page_id_cache()
+
+        if not self._page_id_cache:
+            raise NotionClientError('Unable to update cache')
+
+        if client not in self._client_offsets:
+            self._client_offsets[client] = 0
+
+        if client not in self._client_orders:
+            self._client_orders[client] = list(range(len(self._page_id_cache)))
+            random.shuffle(self._client_orders[client])
+
+        if direction == QueryDirection.FORWARD:
+            self._client_offsets[client] += 1
+            if self._client_offsets[client] > len(self._page_id_cache) - 1:
+                self._client_offsets[client] = 0
+        elif direction == QueryDirection.REVERSE:
+            self._client_offsets[client] -= 1
+            if self._client_offsets[client] < 0:
+                self._client_offsets[client] = len(self._page_id_cache) - 1
+        elif direction == QueryDirection.RANDOM:
+            self._client_offsets[client] = random.randint(0, len(self._page_id_cache) - 1)
+        else:
+            raise ValueError(f'Invalid direction: {direction}')
+
+        logger.info(f'Orders: {self._client_orders[client]}, Offset: {self._client_offsets[client]}')
+
+        index = self._client_orders[client][self._client_offsets[client]]
+        logger.info(f'Index: {index} From Offset: {self._client_offsets[client]}')
+        page_id = self._page_id_cache[index]
+        return await self.fetch_page(page_id)
+
+    async def get_next_item(self, client: str) -> Optional[NotionQuote]:
         """Return the next item from the database based on the page ID cache.
+
+        Args:
+            client (str): The client host.
 
         Returns:
             Optional[NotionQuote]: The next item from the database if the cache exists, None otherwise.
         """
-        logger.info('Getting next item')
-        if not self._page_id_cache:
-            await self.update_page_id_cache()
+        return await self._get_item(client, QueryDirection.FORWARD)
 
-        if not self._page_id_cache:
-            raise NotionClientError('Unable to update cache')
-
-        page_id = self._page_id_cache.pop(0)
-        self._page_id_cache.append(page_id)
-        self._last_id_returned = page_id
-        return await self.fetch_page(page_id)
-
-    async def get_previous_item(self) -> Optional[NotionQuote]:
+    async def get_previous_item(self, client: str) -> Optional[NotionQuote]:
         """Return the previous item from the database based on the page ID cache.
+
+        Args:
+            client (str): The client host.
 
         Returns:
             Optional[NotionQuote]: The previous item from the database if the cache exists, None otherwise.
         """
-        logger.info('Getting previous item')
-        if not self._page_id_cache:
-            await self.update_page_id_cache()
+        return await self._get_item(client, QueryDirection.REVERSE)
 
-        if not self._page_id_cache:
-            raise NotionClientError('Unable to update cache')
-
-        # If the previous item is at the front, send it to the back
-        if self._page_id_cache.index(self._last_id_returned) == 0:
-            temp_item = self._page_id_cache.pop(0)
-            self._page_id_cache.append(temp_item)
-
-        page_id = self._page_id_cache.pop(0)
-        self._page_id_cache.append(page_id)
-        self._last_id_returned = page_id
-        return await self.fetch_page(page_id)
-
-    async def get_random_item(self) -> Optional[NotionQuote]:
+    async def get_random_item(self, client: str) -> Optional[NotionQuote]:
         """Return a random item from the database based on the page ID cache.
+
+        Args:
+            client (str): The client host.
 
         Returns:
             Optional[NotionQuote]: The random item from the database if the cache exists, None otherwise.
         """
-        logger.info('Getting random item')
-        if not self._page_id_cache:
-            await self.update_page_id_cache()
-
-        if not self._page_id_cache:
-            raise NotionClientError('Unable to update cache')
-
-        page_id = random.choice(self._page_id_cache)
-        self._page_id_cache.remove(page_id)
-        self._page_id_cache.append(page_id)
-
-        self._last_id_returned = page_id
-
-        return await self.fetch_page(page_id)
+        return await self._get_item(client, QueryDirection.RANDOM)

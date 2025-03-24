@@ -31,9 +31,9 @@ async def root_endpoint(request: Request):
 @app.get("/next")
 async def next_endpoint(request: Request):
     t = Timer()
-    logger.info(f"request: {request.method} {request.url}")
+    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
 
-    quote_item = await notion_db.get_next_item()
+    quote_item = await notion_db.get_next_item(request.client.host)
     response = await _process_quote(quote_item)
     logger.info(f'response: "{quote_item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
     return response
@@ -42,9 +42,9 @@ async def next_endpoint(request: Request):
 @app.get("/previous")
 async def previous_endpoint(request: Request):
     t = Timer()
-    logger.info(f"request: {request.method} {request.url}")
+    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
 
-    quote_item = await notion_db.get_previous_item()
+    quote_item = await notion_db.get_previous_item(request.client.host)
     response = await _process_quote(quote_item)
     logger.info(f'response: "{quote_item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
     return response
@@ -53,9 +53,9 @@ async def previous_endpoint(request: Request):
 @app.get("/random")
 async def random_endpoint(request: Request):
     t = Timer()
-    logger.info(f"request: {request.method} {request.url}")
+    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
 
-    quote_item = await notion_db.get_random_item()
+    quote_item = await notion_db.get_random_item(request.client.host)
     response = await _process_quote(quote_item)
     logger.info(f'response: "{quote_item.image_path_processed.as_posix()}" generated in {t.get_elapsed_time()} seconds')
     return response
