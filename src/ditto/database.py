@@ -97,6 +97,10 @@ class Client:
         self._cache_size = cache_size
         self._random = Random()
         self.update_cache_size(self._cache_size)
+        logger.debug(f'{self}: New Client Instance with size {self._cache_size}')
+
+    def __repr__(self):
+        return f'Client[{self.name}]'
 
     def update_cache_size(self, cache_size: int):
         """Update the cache size, refreshing the indices list and updating the index.
@@ -107,10 +111,10 @@ class Client:
         Returns:
             None
         """
+        logger.debug(f'{self}: Updating cache size to {cache_size}')
         self._cache_size = cache_size
         self._page_indices = list(range(cache_size))
         self._random.shuffle(self._page_indices)
-        logger.info(f"Indices list: {self._page_indices}")
         self._index = min(self._index, self._cache_size - 1)
 
     def _move_index(self, direction: QueryDirection):
@@ -122,7 +126,7 @@ class Client:
         Returns:
             None
         """
-        logger.info(f"Before {self._index}")
+        before = self._index
         if direction == QueryDirection.FORWARD:
             self._index += 1
             if self._index > self._cache_size - 1:
@@ -135,20 +139,23 @@ class Client:
             self._index = self._random.randint(0, self._cache_size - 1)
         else:
             raise ValueError(f'Invalid direction: {direction}')
-        logger.info(f"After {self._index}")
+        logger.debug(f"{self}: Moved index in {direction}: {before} ==> {self._index}")
 
-    def get_item_index(self, direction: QueryDirection) -> int:
+    def get_item_index(self, direction: Optional[QueryDirection]) -> int:
         """Return an index in the order list for the given direction, this index is used to pull a quote from the master
         quote cache.
 
         Args:
-            direction (QueryDirection): The direction to get the index for.
+            direction (Optional[QueryDirection]): The direction to get the index.
 
         Returns:
             int: The index in the order list for the given direction.
         """
-        self._move_index(direction)
-        return self._page_indices[self._index]
+        if direction:
+            self._move_index(direction)
+        result = self._page_indices[self._index]
+        logger.debug(f'{self}: Got page index {result} from internal index {self._index}')
+        return result
 
 
 class NotionQuote:
