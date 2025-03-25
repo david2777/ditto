@@ -1,13 +1,13 @@
-from random import Random
 import asyncio
 import requests
 from enum import Enum
 from pathlib import Path
+from random import Random
 from datetime import datetime
-from typing import Optional, Callable, Dict, List, Set
+from typing import Optional, Callable, Dict, List
 
-from notion_client import AsyncClient, APIResponseError
 from loguru import logger
+from notion_client import AsyncClient, APIResponseError
 
 from ditto import constants, secrets, image_processing
 
