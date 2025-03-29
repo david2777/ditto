@@ -1,5 +1,3 @@
-import tomllib
-
 # Image Formatting
 WIDTH = 480
 HEIGHT = 800
@@ -24,11 +22,27 @@ AUTHOR_FONT_INDEX = 0
 OUTPUT_DIR = None
 CACHE_ENABLED = False
 
-def _get_version():
+
+def _get_toml_data():
+    import tomllib
     with open("pyproject.toml", "rb") as f:
         data = tomllib.load(f)
+    return data
 
-    version = data["project"]["version"]
-    return version
 
-VERSION = _get_version()
+TOML_DATA = _get_toml_data()
+PROJECT_NAME = TOML_DATA["project"]["version"]
+PROJECT_DESCRIPTION = TOML_DATA["project"]["description"]
+VERSION = TOML_DATA["project"]["version"]
+
+APP_META = {'title': PROJECT_NAME,
+            'description': PROJECT_DESCRIPTION,
+            'version': VERSION,
+            'contact': {"name": "David Lee-DuVoisin",
+                        "url": "https://david.lee-duvoisin.com",
+                        "email": "daduvo11@gmail..com",
+                        },
+            'license_info': {
+                "name": "MIT",
+                "url": "https://opensource.org/licenses/MIT",
+            }}
