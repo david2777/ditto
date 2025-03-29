@@ -3,13 +3,14 @@ import requests
 from enum import Enum
 from pathlib import Path
 from random import Random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Callable, Dict, List
 
 from loguru import logger
 from notion_client import AsyncClient, APIResponseError
 
 from ditto import constants, secrets, image_processing
+from ditto.utilities.timer import Timer
 
 OUTPUT_DIR = constants.OUTPUT_DIR or 'test_images/resize'
 OUTPUT_DIR = Path(OUTPUT_DIR).resolve()
@@ -210,7 +211,7 @@ class NotionQuote:
         Returns:
             Optional[str]: The image URL if one exists, None otherwise.
         """
-        if self.image_expiry_time and datetime.now() < self.image_expiry_time:
+        if self.image_expiry_time and datetime.now(timezone.utc) < self.image_expiry_time:
             image_block = await NotionDatabaseManager.fetch_image_block(self.page_id)
             if image_block['type'] == 'file':
                 self._image_url = image_block['file']['url']
@@ -249,11 +250,14 @@ class NotionQuote:
         if not image_url:
             return False
 
+        t = Timer()
+        logger.debug(f'Downloading image at {image_url}...')
         response = requests.get(image_url)
         if response.status_code == 200:
             self.image_path_raw.parent.mkdir(parents=True, exist_ok=True)
             with open(self.image_path_raw.as_posix(), "wb") as f:
                 f.write(response.content)
+        logger.debug(f'Took {t.get_elapsed_time()} to download image')
         return True
 
     async def process_image(self):
@@ -270,13 +274,14 @@ class NotionQuote:
                 await self.download_image()
             else:
                 raise NotImplementedError(f"Fallback Image Not Implemented")
-
+        t = Timer()
         image = image_processing.DittoImage(self.image_path_raw.as_posix())
         image.initial_resize()
         image.blur()
         image.add_text(self.quote, self.title, self.author)
         self.image_path_processed.parent.mkdir(parents=True, exist_ok=True)
         image.write(self.image_path_processed.as_posix())
+        logger.debug(f'Took {t.get_elapsed_time()} to process image: {self.image_path_processed.as_posix()}')
 
 
 class NotionDatabaseManager:
@@ -320,6 +325,7 @@ class NotionDatabaseManager:
             None
         """
         logger.info('Updating cache')
+        t = Timer()
 
         try:
             response = await api_request(notion_client.databases.query, database_id=self.database_id)
@@ -354,9 +360,10 @@ class NotionDatabaseManager:
                 client.update_cache_size(new_count)
 
         if client_count:
-            logger.info(f'Cache and {client_count} clients updated with {new_count} items')
+            logger.info(f'Cache and {client_count} clients updated with {new_count} items '
+                        f'in {t.get_elapsed_time()} seconds')
         else:
-            logger.info(f'Cache updated with {new_count} items')
+            logger.info(f'Cache updated with {new_count} items in {t.get_elapsed_time()} seconds')
 
     @staticmethod
     async def fetch_image_block(page_id: str) -> Optional[dict]:
@@ -368,6 +375,7 @@ class NotionDatabaseManager:
         Returns:
             Optional[dict]: The image block if one exists, None otherwise.
         """
+        t = Timer()
         try:
             blocks = await api_request(notion_client.blocks.children.list, page_id)
         except APIResponseError as error:
@@ -378,8 +386,10 @@ class NotionDatabaseManager:
             block_type = block['type']
             if block_type == 'image':
                 image_block = block['image']
+                logger.debug(f'Took {t.get_elapsed_time()} to fetch image block for {page_id}')
                 return image_block
 
+        logger.debug(f'Took {t.get_elapsed_time()} to fail to fetch image block for {page_id}')
         return None
 
     async def fetch_page(self, page_id: str) -> Optional[NotionQuote]:
@@ -391,6 +401,7 @@ class NotionDatabaseManager:
         Returns:
             Optional[NotionQuote]: An item from the database if found, None otherwise.
         """
+        t = Timer()
         try:
             return self._quote_item_cache[page_id]
         except KeyError:
@@ -411,6 +422,7 @@ class NotionDatabaseManager:
         logger.info(f'Next item retrieved: {page_id}')
         item = NotionQuote(page, image_block)
         self._quote_item_cache[page_id] = item
+        logger.info(f'Took {t.get_elapsed_time()} to fetch page item for {page_id}')
         return item
 
     async def _get_item(self, client_name: str, direction: QueryDirection) -> Optional[NotionQuote]:
