@@ -27,6 +27,10 @@ class NotionClientError(RuntimeError):
     pass
 
 
+rate_limit_event = asyncio.Event()
+rate_limit_event.set()
+
+
 async def api_request(api_func: Callable, *args, max_retries:int = 5, initial_backoff:int = 1, **kwargs) -> dict:
     """Make a Notion API request with automatic retry on rate limit errors.
 
@@ -48,6 +52,7 @@ async def api_request(api_func: Callable, *args, max_retries:int = 5, initial_ba
     backoff = initial_backoff
 
     while retries <= max_retries:
+        await rate_limit_event.wait()
         try:
             response = await api_func(*args, **kwargs)
             return response
@@ -56,7 +61,9 @@ async def api_request(api_func: Callable, *args, max_retries:int = 5, initial_ba
             if error.status == 429:
                 retry_after = int(error.headers.get("Retry-After", backoff))
                 logger.error(f"Rate limit exceeded. Retrying in {retry_after} seconds...")
+                rate_limit_event.clear()
                 await asyncio.sleep(retry_after)
+                rate_limit_event.set()
                 backoff *= 2
                 retries += 1
             # If not a rate limit error, re-raise
