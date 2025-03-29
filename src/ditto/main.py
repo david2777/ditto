@@ -23,7 +23,7 @@ class GlobalState:
     last_request = {}
 
     def __new__(cls):
-        if getattr(cls, '_instance') is None:
+        if cls._instance is None:
             cls._instance = super(GlobalState, cls).__new__(cls)
         return cls._instance
 
