@@ -5,17 +5,17 @@ PADDING = 10
 
 QUOTE_HEIGHT = 650
 QUOTE_COLOR = "white"
-QUOTE_FONT = "Charter.ttc"
+QUOTE_FONT = "resources/fonts/Charter.ttc"
 QUOTE_FONT_INDEX = 3
 
 TITLE_HEIGHT = 50
 TITLE_COLOR = "white"
-TITLE_FONT = "Charter.ttc"
+TITLE_FONT = "resources/fonts/Charter.ttc"
 TITLE_FONT_INDEX = 1
 
 AUTHOR_HEIGHT = 35
 AUTHOR_COLOR = "white"
-AUTHOR_FONT = "Charter.ttc"
+AUTHOR_FONT = "resources/fonts/Charter.ttc"
 AUTHOR_FONT_INDEX = 0
 
 # App
