@@ -206,12 +206,13 @@ class NotionQuote:
         return f'NotionQuote[{self.page_id}]'
 
     async def get_image_url(self) -> Optional[str]:
-        """Returns the image URL handling refreshing the URL if the link has expired.
+        """Returns the image URL from the first image block, handling refreshing the URL if the link has expired.
 
         Returns:
             Optional[str]: The image URL if one exists, None otherwise.
         """
-        if self.image_expiry_time and datetime.now(timezone.utc) < self.image_expiry_time:
+        if not self._image_url or (self.image_expiry_time and datetime.now(timezone.utc) > self.image_expiry_time):
+            # Only refresh if we don't have a URL or if it's expired
             image_block = await NotionDatabaseManager.fetch_image_block(self.page_id)
             if image_block['type'] == 'file':
                 self._image_url = image_block['file']['url']
@@ -241,7 +242,7 @@ class NotionQuote:
         return OUTPUT_DIR / 'processed' / f'{self.page_id}.jpg'
 
     async def download_image(self) -> bool:
-        """Attempted to download the image from the image URL and store it as the raw image.
+        """Attempt to download the image from the image URL and store it as the raw image.
 
         Returns:
             bool: True if the image was downloaded, False otherwise.
@@ -252,11 +253,12 @@ class NotionQuote:
 
         t = Timer()
         logger.debug(f'Downloading image at {image_url}...')
-        response = requests.get(image_url)
-        if response.status_code == 200:
-            self.image_path_raw.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.image_path_raw.as_posix(), "wb") as f:
-                f.write(response.content)
+        with requests.Session() as session:
+            response = session.get(image_url)
+            if response.status_code == 200:
+                self.image_path_raw.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.image_path_raw.as_posix(), "wb") as f:
+                    f.write(response.content)
         logger.debug(f'Took {t.get_elapsed_time()} to download image')
         return True
 
