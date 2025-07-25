@@ -12,7 +12,7 @@ from notion_client import AsyncClient, APIResponseError
 from ditto import constants, secrets, image_processing
 from ditto.utilities.timer import Timer
 
-OUTPUT_DIR = constants.OUTPUT_DIR or 'test_images/resize'
+OUTPUT_DIR = constants.OUTPUT_DIR
 OUTPUT_DIR = Path(OUTPUT_DIR).resolve()
 
 notion_client = AsyncClient(auth=secrets.NOTION_KEY)

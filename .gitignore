@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python,pycharm,opencv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,pycharm,opencv
 
+# Working temp data
+data/
+
 ### OpenCV ###
 #OpenCV for Mac and Linux
 #build and release folders

@@ -19,7 +19,7 @@ AUTHOR_FONT = "resources/fonts/Charter.ttc"
 AUTHOR_FONT_INDEX = 0
 
 # App
-OUTPUT_DIR = None
+OUTPUT_DIR = 'data'
 CACHE_ENABLED = False
 
 
