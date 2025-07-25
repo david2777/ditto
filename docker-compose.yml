@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  ditto:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./resources:/app/resources
+      - ditto_data:/app/data
+    environment:
+      - NOTION_KEY=${NOTION_KEY}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+    restart: unless-stopped
+
+volumes:
+  ditto_data:
