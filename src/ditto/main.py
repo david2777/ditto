@@ -9,7 +9,6 @@ from ditto.utilities.timer import Timer
 
 notion_db = database.NotionDatabaseManager(secrets.NOTION_DATABASE_ID)
 
-# TODO: Remove duplicate code
 # TODO: Rework global state to be a rolling list of the last x responses
 
 app = FastAPI(**constants.APP_META)
@@ -45,36 +44,48 @@ class GlobalState:
         self.last_request = {'host': request.client.host,
                              'method': request.method,
                              'url': request.url._url,
-                             'result_id': quote_id, }
+                             'result_id': quote_id}
 
 
-async def _process_quote(request: Request, quote_item: database.NotionQuote, width: Optional[int] = None,
-                         height: Optional[int] = None) -> Union[FileResponse, JSONResponse]:
+async def _process_quote(request: Request, width: Optional[int] = None, height: Optional[int] = None) \
+        -> Union[FileResponse, JSONResponse]:
     """Process a quote item and return the response
 
     Args:
         request (Request): Request object.
-        quote_item (database.NotionQuote): Quote item from the database.
         width (Optional[int]): Width of the image.
         height (Optional[int]): Height of the image.
 
     Returns:
         Union[FileResponse, JSONResponse]: The resulting file response.
     """
-    image_path = await quote_item.process_image(width, height)
+    try:
+        t = Timer()
+        logger.info(f"request: {request.method} {request.url} from {request.client.host}")
 
-    if image_path is None or not image_path.is_file():
-        return JSONResponse(status_code=500, content={"message": "Failed to process image"})
+        quote_item = await notion_db.get_item_from_request(request=request)
+        if not quote_item:
+            return JSONResponse(status_code=404, content={"message": "No quotes available"})
 
-    gs = GlobalState()
-    gs.set_last_request(request, quote_item.page_id)
+        image_path = await quote_item.process_image(width, height)
 
-    response = FileResponse(image_path, media_type="image/jpeg")
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+        if image_path is None or not image_path.is_file():
+            return JSONResponse(status_code=500, content={"message": "Failed to process image"})
 
+        gs = GlobalState()
+        gs.set_last_request(request, quote_item.page_id)
+
+        response = FileResponse(image_path, media_type="image/jpeg")
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+        logger.info(f'response: "{response.path}" generated in {t.get_elapsed_time()} seconds')
+
+        return response
+    except Exception:
+        logger.exception("Error processing request")
+        return JSONResponse(status_code=500, content={"message": "Internal server error"})
 
 @app.get("/", summary="Server State", description="Return basic state information")
 async def root_endpoint(request: Request) -> JSONResponse:
@@ -109,22 +120,7 @@ async def next_endpoint(request: Request, width: Optional[int] = None, height: O
     Returns:
         Union[FileResponse, JSONResponse]: The next quote for this client.
     """
-    t = Timer()
-    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
-
-    try:
-        quote_item = await notion_db.get_next_item(request.client.host)
-        if not quote_item:
-            return JSONResponse(status_code=404, content={"message": "No quotes available"})
-        response = await _process_quote(request, quote_item, width, height)
-        if isinstance(response, FileResponse):
-            logger.info(f'response: "{response.path}" generated in {t.get_elapsed_time()} seconds')
-        else:
-            logger.info(f'response: {response.status_code} generated in {t.get_elapsed_time()} seconds')
-        return response
-    except Exception:
-        logger.exception("Error processing request")
-        return JSONResponse(status_code=500, content={"message": "Internal server error"})
+    return await _process_quote(request, width, height)
 
 
 @app.get("/previous", summary="Previous Quote", description="Return the previous quote for this client",
@@ -140,22 +136,7 @@ async def previous_endpoint(request: Request, width: Optional[int] = None, heigh
     Returns:
         Union[FileResponse, JSONResponse]: The previous quote for this client.
     """
-    t = Timer()
-    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
-
-    try:
-        quote_item = await notion_db.get_previous_item(request.client.host)
-        if not quote_item:
-            return JSONResponse(status_code=404, content={"message": "No quotes available"})
-        response = await _process_quote(request, quote_item, width, height)
-        if isinstance(response, FileResponse):
-            logger.info(f'response: "{response.path}" generated in {t.get_elapsed_time()} seconds')
-        else:
-            logger.info(f'response: {response.status_code} generated in {t.get_elapsed_time()} seconds')
-        return response
-    except Exception:
-        logger.exception("Error processing request")
-        return JSONResponse(status_code=500, content={"message": "Internal server error"})
+    return await _process_quote(request, width, height)
 
 
 @app.get("/random", summary="Random Quote", description="Return a random quote for this client", **image_meta)
@@ -170,22 +151,7 @@ async def random_endpoint(request: Request, width: Optional[int] = None, height:
     Returns:
         Union[FileResponse, JSONResponse]: The random quote for this client.
     """
-    t = Timer()
-    logger.info(f"request: {request.method} {request.url} from {request.client.host}")
-
-    try:
-        quote_item = await notion_db.get_random_item(request.client.host)
-        if not quote_item:
-            return JSONResponse(status_code=404, content={"message": "No quotes available"})
-        response = await _process_quote(request, quote_item, width, height)
-        if isinstance(response, FileResponse):
-            logger.info(f'response: "{response.path}" generated in {t.get_elapsed_time()} seconds')
-        else:
-            logger.info(f'response: {response.status_code} generated in {t.get_elapsed_time()} seconds')
-        return response
-    except Exception:
-        logger.exception("Error processing request")
-        return JSONResponse(status_code=500, content={"message": "Internal server error"})
+    return await _process_quote(request, width, height)
 
 
 @app.get("/health")

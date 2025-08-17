@@ -1,12 +1,13 @@
 import asyncio
 import requests
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from random import Random
 from datetime import datetime, timezone
 from typing import Optional, Callable, Dict, List
 
 from loguru import logger
+from fastapi import Request
 from notion_client import AsyncClient, APIResponseError
 
 from ditto import constants, secrets, image_processing
@@ -18,10 +19,21 @@ OUTPUT_DIR = Path(OUTPUT_DIR).resolve()
 notion_client = AsyncClient(auth=secrets.NOTION_KEY)
 
 
-class QueryDirection(Enum):
-    FORWARD = 1
-    REVERSE = 2
-    RANDOM = 3
+class QueryDirection(StrEnum):
+    FORWARD = '/next'
+    REVERSE = '/previous'
+    RANDOM = '/random'
+
+    @staticmethod
+    def from_request(request: Request):
+        if request.url.path == '/next':
+            return QueryDirection.FORWARD
+        if request.url.path == '/next':
+            return QueryDirection.REVERSE
+        if request.url.path == '/random':
+            return QueryDirection.RANDOM
+        else:
+            return None
 
 
 class NotionClientError(RuntimeError):
@@ -467,6 +479,22 @@ class NotionDatabaseManager:
 
         page_id = self._page_id_cache[index]
         return await self.fetch_page(page_id)
+
+    async def get_item_from_request(self, request: Request) -> Optional[NotionQuote]:
+        """Return an item from the database based on the request.
+
+        Args:
+            request (Request): The request object.
+
+        Returns:
+            Optional[NotionQuote]: An item from the database if found, None otherwise.
+        """
+        direction = QueryDirection.from_request(request)
+        if direction is None:
+            return None
+
+        return await self._get_item(request.client.host, direction)
+
 
     async def get_next_item(self, client_name: str) -> Optional[NotionQuote]:
         """Return the next item from the database based on the page ID cache.
