@@ -232,14 +232,13 @@ class NotionQuote:
         """
         return OUTPUT_DIR / 'raw' / f'{self.page_id}.jpg'
 
-    @property
-    def image_path_processed(self) -> Path:
+    def get_image_path_processed(self, width: int, height: int) -> Path:
         """Returns the path for the processed image on disk weather or not it exits.
 
         Returns:
             Path: The path for the processed image on disk.
         """
-        return OUTPUT_DIR / 'processed' / f'{self.page_id}.jpg'
+        return OUTPUT_DIR / 'processed' / f'{self.page_id}-{width}x{height}.jpg'
 
     async def download_image(self) -> bool:
         """Attempt to download the image from the image URL and store it as the raw image.
@@ -262,28 +261,40 @@ class NotionQuote:
         logger.debug(f'Took {t.get_elapsed_time()} to download image')
         return True
 
-    async def process_image(self):
+    async def process_image(self, width: Optional[int] = None, height: Optional[int] = None) -> Optional[Path]:
         """Processed the image and saved out the processed image. If an image does not exist, use a fallback image.
 
+        Args:
+            width (Optional[int]): The width of the processed image.
+            height (Optional[int]): The height of the processed image.
+
         Returns:
-            None
+            Optional[Path]: The path to the processed image if it was processed, None otherwise.
         """
-        if self.image_path_processed.exists():
-            return
+        width = width or constants.WIDTH
+        height = height or constants.HEIGHT
+
+        output_path = self.get_image_path_processed(width, height)
+
+        if output_path.is_file() and constants.CACHE_ENABLED:
+            return output_path
 
         if not self.image_path_raw.is_file():
             if self._image_url:
                 await self.download_image()
             else:
                 raise NotImplementedError(f"Fallback Image Not Implemented")
+
         t = Timer()
-        image = image_processing.DittoImage(self.image_path_raw.as_posix())
-        image.initial_resize()
-        image.blur()
-        image.add_text(self.quote, self.title, self.author)
-        self.image_path_processed.parent.mkdir(parents=True, exist_ok=True)
-        image.write(self.image_path_processed.as_posix())
-        logger.debug(f'Took {t.get_elapsed_time()} to process image: {self.image_path_processed.as_posix()}')
+        image = image_processing.DittoImage(self.image_path_raw.as_posix(), width, height)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        result = image.process(output_path.as_posix(), self.quote, self.title, self.author)
+        if result:
+            logger.debug(f'Took {t.get_elapsed_time()} to process image: {output_path.as_posix()}')
+        else:
+            logger.error(f'Failed to process image: {output_path.as_posix()}')
+            return None
+        return output_path
 
 
 class NotionDatabaseManager:

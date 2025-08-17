@@ -1,20 +1,23 @@
+import os
+
 import cv2
 import numpy as np
 from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 
 from ditto.utilities import wrap_text
-from ditto.constants import (WIDTH, HEIGHT, PADDING,
-                             QUOTE_HEIGHT, QUOTE_COLOR, QUOTE_FONT, QUOTE_FONT_INDEX,
-                             AUTHOR_HEIGHT, AUTHOR_COLOR, AUTHOR_FONT, AUTHOR_FONT_INDEX,
-                             TITLE_HEIGHT, TITLE_COLOR, TITLE_FONT, TITLE_FONT_INDEX)
+from ditto.constants import *
 
 
 class DittoImage:
     image: np.ndarray = None
+    blur_size: int = 35
+    blur_sigma: float = 5.0
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, width: int, height: int):
         self.file_path = file_path
+        self.width = width
+        self.height = height
         self.image = cv2.imread(file_path)
 
     def show(self, title: str = None):
@@ -23,21 +26,33 @@ class DittoImage:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def write(self, file_path: str):
-        cv2.imwrite(file_path, self.image)
+    def write(self, file_path: str) -> bool:
+        logger.info(f"Writing image to {file_path}")
+        if not self.image.any():
+            raise ValueError("Image not processed.")
+        check = cv2.imwrite(file_path, self.image)
+        if not check and os.path.isdir(file_path):
+            os.rmdir(file_path)
+        return check
 
-    def initial_resize(self):
+    def process(self, output_path: str, quote: str, title: str, author: str):
+        self._initial_resize()
+        self._blur()
+        self._add_text(quote, title, author)
+        return self.write(output_path)
+
+    def _initial_resize(self):
         height, width = self.image.shape[:2]
         logger.info(f"Input width={width}, height={height}")
 
         # First resize to at least the height
-        scale_factor = HEIGHT / float(height)
+        scale_factor = self.height / float(height)
         width = int(width * scale_factor)
         height = int(height * scale_factor)
 
         # If the width is still to small, resize up based on the width
-        if width < WIDTH:
-            scale_factor = WIDTH / float(width)
+        if width < self.width:
+            scale_factor = self.width / float(width)
             width = int(width * scale_factor)
             height = int(height * scale_factor)
 
@@ -45,19 +60,19 @@ class DittoImage:
         self.image = cv2.resize(self.image, (width, height))
 
         # Super basic top down crop, will update to be context-sensitive
-        logger.info(f"Crop width={WIDTH}, height={HEIGHT}")
-        self.image = self.image[:HEIGHT, :WIDTH]
+        logger.info(f"Crop width={self.width}, height={self.height}")
+        self.image = self.image[:self.height, :self.width]
 
-    def blur(self, size: int = 35, sigma: float = 5.0):
-        self.image = cv2.GaussianBlur(self.image, (size, size), sigma)
+    def _blur(self):
+        self.image = cv2.GaussianBlur(self.image, (self.blur_size, self.blur_size), self.blur_sigma)
 
-    def add_text(self, quote: str, title: str, author: str):
+    def _add_text(self, quote: str, title: str, author: str):
         # Convert image from cv2 format to PIL
         rgb_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_image)
 
         # Add quote
-        width = WIDTH - (PADDING * 2)
+        width = self.width - (PADDING * 2)
         height = QUOTE_HEIGHT - (PADDING * 2)
 
         font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
@@ -70,7 +85,7 @@ class DittoImage:
         # Add Title
         font = ImageFont.truetype(TITLE_FONT, TITLE_HEIGHT, index=TITLE_FONT_INDEX)
         font = wrap_text.fit_text_width(title, font, width, max_font_size=TITLE_HEIGHT)
-        xy = (WIDTH - PADDING, HEIGHT - PADDING - AUTHOR_HEIGHT)
+        xy = (self.width - PADDING, self.height - PADDING - AUTHOR_HEIGHT)
         draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd")
 
         # Add Author
@@ -78,7 +93,7 @@ class DittoImage:
 
         font = ImageFont.truetype(AUTHOR_FONT, AUTHOR_HEIGHT, index=AUTHOR_FONT_INDEX)
         font = wrap_text.fit_text_width(author, font, width, max_font_size=AUTHOR_HEIGHT)
-        xy = (WIDTH - PADDING, HEIGHT - PADDING)
+        xy = (self.width - PADDING, self.height - PADDING)
         draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd")
 
         # Convert back to cv2 and back to BGR
