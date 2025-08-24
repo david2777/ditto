@@ -1,8 +1,10 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-slim
 
 LABEL maintainer="daduvo11@gmail.com" \
       description="Ditto - A Notion-based quote service" \
-      version="1.0.2"
+      version="1.0.3"
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
@@ -15,21 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
-COPY pyproject.toml uv.lock ./
-COPY src/ ./src/
-COPY resources/ ./resources/
+COPY . /app
 
 # Install uv package manager and install dependencies
-RUN pip install uv && \
-    uv pip install --no-cache .
+RUN uv pip install --system --no-cache .
 
 # Expose port
 EXPOSE 8000
 
-# Set environment variables
-ENV PYTHONPATH=/app/src
-ENV PYTHONUNBUFFERED=1
-
+# Set up health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
