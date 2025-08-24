@@ -132,29 +132,35 @@ class DittoImage:
         rgb_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_image)
 
+        padding_w_pixels = int(PADDING_WIDTH * self.width)
+        padding_h_pixels = int(PADDING_HEIGHT * self.height)
+        quote_h_pixels = int(QUOTE_HEIGHT * self.height)
+        title_h_pixels = int(TITLE_HEIGHT * self.height)
+        author_h_pixels = int(AUTHOR_HEIGHT * self.height)
+
         # Add quote
-        width = self.width - (PADDING * 2)
-        height = QUOTE_HEIGHT - (PADDING * 2)
+        width = int(self.width - (padding_w_pixels * 2))
+        height = int(quote_h_pixels - (padding_h_pixels * 2))
 
         font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
         text, font = wrap_text.fit_text(quote, font, width, height)
 
         draw = ImageDraw.Draw(pil_image)
-        xy = (PADDING, PADDING)
+        xy = (padding_w_pixels, padding_h_pixels)
         draw.text(xy, text, QUOTE_COLOR, font=font, align="center")
 
         # Add Title
-        font = ImageFont.truetype(TITLE_FONT, TITLE_HEIGHT, index=TITLE_FONT_INDEX)
-        font = wrap_text.fit_text_width(title, font, width, max_font_size=TITLE_HEIGHT)
-        xy = (self.width - PADDING, self.height - PADDING - AUTHOR_HEIGHT)
+        font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
+        font = wrap_text.fit_text_width(title, font, width, max_font_size=title_h_pixels)
+        xy = (self.width - padding_w_pixels, self.height - padding_h_pixels - author_h_pixels)
         draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd")
 
         # Add Author
         author = f'- {author}'
 
-        font = ImageFont.truetype(AUTHOR_FONT, AUTHOR_HEIGHT, index=AUTHOR_FONT_INDEX)
-        font = wrap_text.fit_text_width(author, font, width, max_font_size=AUTHOR_HEIGHT)
-        xy = (self.width - PADDING, self.height - PADDING)
+        font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
+        font = wrap_text.fit_text_width(author, font, width, max_font_size=author_h_pixels)
+        xy = (self.width - padding_w_pixels, self.height - padding_h_pixels)
         draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd")
 
         # Convert back to cv2 and back to BGR

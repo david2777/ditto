@@ -1,19 +1,21 @@
 # Image Formatting
 DEFAULT_WIDTH = 480
 DEFAULT_HEIGHT = 800
-PADDING = 10
 
-QUOTE_HEIGHT = 650
+PADDING_WIDTH = (15 / DEFAULT_WIDTH)  # 3.125% width
+PADDING_HEIGHT = (15 / DEFAULT_HEIGHT)  # 1.875% height * 4 = 7.5% total
+
+QUOTE_HEIGHT = (640 / DEFAULT_HEIGHT)  # 80% height
 QUOTE_COLOR = "white"
 QUOTE_FONT = "resources/fonts/Charter.ttc"
 QUOTE_FONT_INDEX = 3
 
-TITLE_HEIGHT = 50
+TITLE_HEIGHT = (60 / DEFAULT_HEIGHT)  # 7.5% height
 TITLE_COLOR = "white"
 TITLE_FONT = "resources/fonts/Charter.ttc"
 TITLE_FONT_INDEX = 1
 
-AUTHOR_HEIGHT = 35
+AUTHOR_HEIGHT = (40 / DEFAULT_HEIGHT)  # 5% height
 AUTHOR_COLOR = "white"
 AUTHOR_FONT = "resources/fonts/Charter.ttc"
 AUTHOR_FONT_INDEX = 0
