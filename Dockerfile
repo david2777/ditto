@@ -1,8 +1,8 @@
-LABEL maintainer="daduvo11@gmail.com"
-LABEL description="Ditto - A Notion-based quote service"
-LABEL version="1.0"
-# Use Python 3.12 slim image as base
 FROM python:3.12-slim
+
+LABEL maintainer="daduvo11@gmail.com" \
+      description="Ditto - A Notion-based quote service" \
+      version="1.0.2"
 
 # Set working directory
 WORKDIR /app
