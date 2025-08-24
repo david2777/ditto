@@ -283,8 +283,8 @@ class NotionQuote:
         Returns:
             Optional[Path]: The path to the processed image if it was processed, None otherwise.
         """
-        width = width or constants.WIDTH
-        height = height or constants.HEIGHT
+        width = width or constants.DEFAULT_WIDTH
+        height = height or constants.DEFAULT_HEIGHT
 
         output_path = self.get_image_path_processed(width, height)
 
