@@ -8,43 +8,11 @@ from ditto import constants, database, secrets
 from ditto.utilities.timer import Timer
 
 notion_db = database.NotionDatabaseManager(secrets.NOTION_DATABASE_ID)
-
-# TODO: Rework global state to be a rolling list of the last x responses
-
 app = FastAPI(**constants.APP_META)
 
 image_meta = {'response_class': FileResponse,
               'responses': {200: {"content": {"image/jpeg": {}},
                                   "description": "Returns an image file (jpeg format)"}}}
-
-
-class GlobalState:
-    """Global state singleton, which stores the last request for debugging.
-
-    """
-    _instance = None
-
-    last_request = {}
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(GlobalState, cls).__new__(cls)
-        return cls._instance
-
-    def set_last_request(self, request: Request, quote_id: str):
-        """Set the last request variable for future retrieval.
-
-        Args:
-            request (Request): Request object.
-            quote_id (str): The resulting quote id.
-
-        Returns:
-            None
-        """
-        self.last_request = {'host': request.client.host,
-                             'method': request.method,
-                             'url': request.url._url,
-                             'result_id': quote_id}
 
 
 async def _process_quote(request: Request, width: Optional[int] = None, height: Optional[int] = None) \
@@ -72,9 +40,6 @@ async def _process_quote(request: Request, width: Optional[int] = None, height: 
         if image_path is None or not image_path.is_file():
             return JSONResponse(status_code=500, content={"message": "Failed to process image"})
 
-        gs = GlobalState()
-        gs.set_last_request(request, quote_item.page_id)
-
         response = FileResponse(image_path, media_type="image/jpeg")
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -98,12 +63,10 @@ async def root_endpoint(request: Request) -> JSONResponse:
         JSONResponse: Basic state information.
     """
     logger.info(f"request: {request.method} {request.url}")
-    gs = GlobalState()
     response = {'application': 'ditto',
                 'version': constants.VERSION,
                 'clients': len(database.NotionDatabaseManager._clients),
-                'quote_count': len(database.NotionDatabaseManager._page_id_cache),
-                'last_request': gs.last_request}
+                'quote_count': len(database.NotionDatabaseManager._page_id_cache)}
     logger.info(f"response: {response}")
     return JSONResponse(content=response, status_code=200)
 
