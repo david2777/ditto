@@ -42,7 +42,7 @@ APP_META = {'title': PROJECT_NAME,
             'version': VERSION,
             'contact': {"name": "David Lee-DuVoisin",
                         "url": "https://david.lee-duvoisin.com",
-                        "email": "daduvo11@gmail..com",
+                        "email": "daduvo11@gmail.com",
                         },
             'license_info': {
                 "name": "MIT",
