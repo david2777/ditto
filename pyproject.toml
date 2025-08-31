@@ -1,6 +1,6 @@
 [project]
 name = "ditto"
-version = "1.0.5"
+version = "1.0.6"
 description = "Server to render quotes from a Notion database to images."
 requires-python = ">=3.12"
 dependencies = [
