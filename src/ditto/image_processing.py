@@ -60,9 +60,11 @@ class DittoImage:
         logger.info(f"Writing image to {file_path}")
         if not self.image.any():
             raise ValueError("Image not processed.")
-        check = cv2.imwrite(file_path, self.image)
+
+        check = cv2.imwrite(file_path, self.image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if not check and os.path.isdir(file_path):
             os.rmdir(file_path)
+
         return check
 
     def process(self, output_path: str, quote: str, title: str, author: str) -> bool:
