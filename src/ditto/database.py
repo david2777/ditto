@@ -200,7 +200,10 @@ class NotionQuote:
 
     def __init__(self, page: dict, image_block: Optional[dict] = None):
         self.page_id = page['id']
-        self.quote = page['properties']['Name']['title'][0]['plain_text']
+        quote = ''
+        for part in page['properties']['Name']['title']:
+            quote += part['plain_text']
+        self.quote = quote
         self.title = page['properties']['Title']['rich_text'][0]['plain_text']
         self.author = page['properties']['Author']['rich_text'][0]['plain_text']
         if image_block:
