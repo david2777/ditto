@@ -40,7 +40,7 @@ def fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size:
 
 
 def fit_text(text: str, font: FreeTypeFont, max_width: int, max_height: int, spacing: int = 4,
-             min_font_size: int = 24, max_font_size: int = 38, step_size: int = 1) -> Tuple[str, FreeTypeFont]:
+             min_font_size: int = 24, max_font_size: int = 48, step_size: int = 1) -> Tuple[str, FreeTypeFont]:
     """Scale text to a given rectangle, starting at the `max_size` and working downward by the `step_size` until a
     match is found or `min_font_size` is reached.
 
