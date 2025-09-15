@@ -80,6 +80,7 @@ class DittoImage:
             bool: True if the image was processed, False otherwise.
         """
         self._initial_resize()
+        self._enhance()
         self._blur()
         self._add_text(quote, title, author)
         return self.write(output_path)
@@ -110,6 +111,27 @@ class DittoImage:
         # Super basic top down crop, will update to be context-sensitive
         logger.info(f"Crop width={self.width}, height={self.height}")
         self.image = self.image[:self.height, :self.width]
+
+    def _enhance(self):
+        """Adjust the brightness, saturation, and contrast of the image to better display on the e-ink screen.
+
+        Returns:
+            None
+        """
+        hsv = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV).astype("float32")
+        h, s, v = cv2.split(hsv)
+        s = np.clip(s * SATURATION, 0, 255)
+        v = np.clip(v * BRIGHTNESS, 0, 255)
+        hsv = cv2.merge([h, s, v]).astype("uint8")
+        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        l_float = (l.astype(np.float32) / 255.0) ** GAMMA
+        l_int = np.clip(l_float * 255, 0, 255).astype(np.uint8)
+        out = cv2.merge([l_int, a, b])
+
+        self.image = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
 
     def _blur(self):
         """Blur the image.
