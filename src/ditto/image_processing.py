@@ -1,4 +1,5 @@
 import os
+from math import ceil
 
 import cv2
 import numpy as np
@@ -8,6 +9,19 @@ from PIL import Image, ImageDraw, ImageFont
 from ditto.utilities import wrap_text
 from ditto.constants import *
 
+
+def _lerp(a: float, b: float, t: float) -> float:
+    """Linearly interpolates between two values a and b based on a parameter t.
+
+    Args:
+        a: The starting value.
+        b: The ending value.
+        t: The interpolation factor.
+
+    Returns:
+        float: The interpolated value based on the inputs a, b, and t.
+    """
+    return a + (b - a) * t
 
 class DittoImage:
     """Class representing a Ditto image.
@@ -168,16 +182,17 @@ class DittoImage:
 
         font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
         text, font = wrap_text.fit_text(quote, font, width, height)
+        quote_stroke = ceil(_lerp(0, 4, ((font.size - 24) / 24)))
 
         draw = ImageDraw.Draw(pil_image)
         xy = (padding_w_pixels, padding_h_pixels)
-        draw.text(xy, text, QUOTE_COLOR, font=font, align="center")
+        draw.text(xy, text, QUOTE_COLOR, font=font, align="center", stroke_width=quote_stroke, stroke_fill="black")
 
         # Add Title
         font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
         font = wrap_text.fit_text_width(title, font, width, max_font_size=title_h_pixels)
         xy = (self.width - padding_w_pixels, self.height - padding_h_pixels - author_h_pixels)
-        draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd")
+        draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
 
         # Add Author
         author = f'- {author}'
@@ -185,7 +200,7 @@ class DittoImage:
         font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
         font = wrap_text.fit_text_width(author, font, width, max_font_size=author_h_pixels)
         xy = (self.width - padding_w_pixels, self.height - padding_h_pixels)
-        draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd")
+        draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
 
         # Convert back to cv2 and back to BGR
         self.image = np.asarray(pil_image)
