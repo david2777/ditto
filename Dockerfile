@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.6.11-python3.12-bookworm-slim
 
 LABEL maintainer="daduvo11@gmail.com" \
       description="Ditto - A Notion-based quote service" \
-      version="1.0.8"
+      version="1.0.9"
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
@@ -20,7 +20,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . /app
 
 # Install uv package manager and install dependencies
-RUN uv pip install --system ".[headless]" --no-cache .
+RUN uv pip install --system --no-cache .
+
+# Remove opencv and add opencv headless
+RUN uv remove opencv-python
+RUN uv add opencv-python-headless
 
 # Expose port
 EXPOSE 8000
