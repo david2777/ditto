@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
+from pykuwahara import kuwahara
 
 from ditto.utilities import wrap_text
 from ditto.constants import *
@@ -154,6 +155,7 @@ class DittoImage:
             None
         """
         self.image = cv2.GaussianBlur(self.image, (self.blur_size, self.blur_size), self.blur_sigma)
+        self.image = kuwahara(self.image, radius=KUWAHARA_RADIUS)
 
     def _add_text(self, quote: str, title: str, author: str):
         """Render the text onto the image.
