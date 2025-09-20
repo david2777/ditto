@@ -23,8 +23,8 @@ COPY . /app
 RUN uv pip install --system --no-cache .
 
 # Remove opencv and add opencv headless
-RUN uv remove opencv-python
-RUN uv add opencv-python-headless
+RUN uv pip uninstall --system opencv-python
+RUN uv pip install --system --no-cache opencv-python-headless
 
 # Expose port
 EXPOSE 8000
