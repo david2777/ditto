@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.6.11-python3.12-bookworm-slim
 
 LABEL maintainer="daduvo11@gmail.com" \
       description="Ditto - A Notion-based quote service" \
-      version="1.0.9"
+      version="1.0.10"
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
