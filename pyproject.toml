@@ -1,13 +1,13 @@
 [project]
 name = "ditto"
-version = "1.0.10"
+version = "1.0.11"
 description = "Server to render quotes from a Notion database to images."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.8",
     "loguru>=0.7.3",
-    "notion-client>=2.3.0",
-    "pillow==11.1.0",
+    "notion-client>=2.5.0",
+    "pillow==11.3.0",
     "pykuwahara>=0.3.2",
     "requests>=2.32.3",
     "uvicorn>=0.34.0",
