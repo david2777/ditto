@@ -135,11 +135,13 @@ class DittoImage:
         """
         hsv = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV).astype("float32")
         h, s, v = cv2.split(hsv)
+        # Modify Saturation and Value
         s = np.clip(s * SATURATION, 0, 255)
         v = np.clip(v * BRIGHTNESS, 0, 255)
         hsv = cv2.merge([h, s, v]).astype("uint8")
         bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
+        # Modify Gamma
         lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
         l_float = (l.astype(np.float32) / 255.0) ** GAMMA

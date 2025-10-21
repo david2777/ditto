@@ -16,7 +16,7 @@ from ditto.utilities.timer import Timer
 OUTPUT_DIR = constants.OUTPUT_DIR
 OUTPUT_DIR = Path(OUTPUT_DIR).resolve()
 
-notion_client = AsyncClient(auth=secrets.NOTION_KEY)
+notion_api = AsyncClient(auth=secrets.NOTION_KEY)
 
 
 class QueryDirection(StrEnum):
@@ -204,8 +204,8 @@ class NotionQuote:
         for part in page['properties']['Name']['title']:
             quote += part['plain_text']
         self.quote = quote
-        self.title = page['properties']['Title']['rich_text'][0]['plain_text']
-        self.author = page['properties']['Author']['rich_text'][0]['plain_text']
+        self.title = page['properties']['TITLE']['rich_text'][0]['plain_text']
+        self.author = page['properties']['AUTHOR']['rich_text'][0]['plain_text']
         if image_block:
             if image_block['type'] == 'file':
                 self._image_url = image_block['file']['url']
@@ -356,7 +356,7 @@ class NotionDatabaseManager:
         t = Timer()
 
         try:
-            response = await api_request(notion_client.databases.query, database_id=self.database_id)
+            response = await api_request(notion_api.databases.query, database_id=self.database_id)
         except APIResponseError as error:
             logger.exception(error)
             return
@@ -364,7 +364,7 @@ class NotionDatabaseManager:
         results = response["results"]
         while response["has_more"]:
             try:
-                response = await api_request(notion_client.databases.query, database_id=self.database_id,
+                response = await api_request(notion_api.databases.query, database_id=self.database_id,
                                              start_cursor=response["next_cursor"])
                 results.extend(response["results"])
             except APIResponseError as error:
@@ -378,7 +378,8 @@ class NotionDatabaseManager:
         previous_count = len(self._page_id_cache)
         self.clear_page_id_cache()
         for db_item in results:
-            self._page_id_cache.append(db_item['id'])
+            if not any([db_item['archived'], db_item['in_trash']]):
+                self._page_id_cache.append(db_item['id'])
 
         new_count = len(self._page_id_cache)
         client_count = 0
@@ -405,7 +406,7 @@ class NotionDatabaseManager:
         """
         t = Timer()
         try:
-            blocks = await api_request(notion_client.blocks.children.list, page_id)
+            blocks = await api_request(notion_api.blocks.children.list, page_id)
         except APIResponseError as error:
             logger.exception(error)
             blocks = {'results': []}
@@ -436,7 +437,7 @@ class NotionDatabaseManager:
             pass
 
         try:
-            page = await api_request(notion_client.pages.retrieve, page_id=page_id)
+            page = await api_request(notion_api.pages.retrieve, page_id=page_id)
         except APIResponseError as error:
             logger.exception(error)
             return None

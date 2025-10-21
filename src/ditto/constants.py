@@ -1,15 +1,15 @@
 # Image Formatting
 DEFAULT_WIDTH = 800
 DEFAULT_HEIGHT = 480
-BRIGHTNESS = 1.0
+BRIGHTNESS = 1.2
 SATURATION = 1.33
 GAMMA = 0.8
 KUWAHARA_RADIUS = 8
 
 PADDING_WIDTH = 0.03125  # 3.125% width
-PADDING_HEIGHT = 0.01875  # 1.875% height * 4 = 7.5% total
+PADDING_HEIGHT = 0.0250  # 2.5% height * 4 = 10% total
 
-QUOTE_HEIGHT = 0.80  # 80% height
+QUOTE_HEIGHT = 0.775  # 77.5% height
 QUOTE_COLOR = "white"
 QUOTE_FONT = "resources/fonts/Charter.ttc"
 QUOTE_FONT_INDEX = 3
