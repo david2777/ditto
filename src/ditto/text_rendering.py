@@ -32,15 +32,13 @@ def render_text(dimensions: tuple[int, int], quote: str, title: str, author: str
     quote_h_pixels = int(QUOTE_HEIGHT * dimensions[1])
     title_h_pixels = int(TITLE_HEIGHT * dimensions[1])
     author_h_pixels = int(AUTHOR_HEIGHT * dimensions[1])
-    logger.debug(f'pws={padding_w_pixels}, ph={padding_h_pixels}')
 
     # Add quote
-    width = int(dimensions[0] - (padding_w_pixels * 2))
-    height = int(quote_h_pixels - (padding_h_pixels * 2))
-    logger.debug(f'w={width}, h={height}')
+    safe_width = int(dimensions[0] - (padding_w_pixels * 2))
+    safe_quote_height = int(quote_h_pixels - (padding_h_pixels * 2) - 8)
 
     font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
-    text, font = _fit_text_bbox(quote, font, width, height)
+    text, font = _fit_text_bbox(quote, font, safe_width, safe_quote_height)
     quote_stroke = ceil(_lerp(1, 4, ((font.size - 24) / 24)))
 
     draw = ImageDraw.Draw(pil_image)
@@ -49,15 +47,13 @@ def render_text(dimensions: tuple[int, int], quote: str, title: str, author: str
 
     # Add Title
     font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
-    font = _fit_text_width(title, font, width, max_font_size=title_h_pixels)
+    font = _fit_text_width(title, font, safe_width, max_font_size=title_h_pixels)
     xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels - author_h_pixels)
     draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
 
     # Add Author
-    author = f'- {author}'
-
     font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
-    font = _fit_text_width(author, font, width, max_font_size=author_h_pixels)
+    font = _fit_text_width(author, font, safe_width, max_font_size=author_h_pixels)
     xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels)
     logger.info(f"Drawing author {author} at xy={xy}")
     draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
@@ -114,11 +110,9 @@ def _fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size
 
 
 def _fit_text_bbox(text: str, font: FreeTypeFont, max_width: int, max_height: int, spacing: int = 4,
-                   min_font_size: int = 24, max_font_size: int = 48, step_size: int = 1) -> Tuple[str, FreeTypeFont]:
+                   min_font_size: int = 24, max_font_size: int = 96, step_size: int = 2) -> Tuple[str, FreeTypeFont]:
     """Scale text to a given rectangle, starting at the `max_size` and working downward by the `step_size` until a
     match is found or `min_font_size` is reached.
-
-    TODO: Do we bother trying to truncate the text as well?
 
     Args:
         text (str): The text to fit.
@@ -153,6 +147,12 @@ def _fit_text_bbox(text: str, font: FreeTypeFont, max_width: int, max_height: in
 
         logger.debug(f"Successfully fit text using {font_size} in {t.get_elapsed_time()} seconds")
         return wrapped_text, test_font
+
+    index = text.rfind('. ')
+    if index != -1:
+        logger.debug(f"Unable to fit text, truncating at period and trying again.")
+        return _fit_text_bbox(text[:index + 1], font, max_width, max_height, spacing, min_font_size, max_font_size,
+                              step_size)
 
     logger.debug(f"Unable to fit text, returning min value of {min_font_size}")
     font = font.font_variant(size=min_font_size)
