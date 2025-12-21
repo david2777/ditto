@@ -504,7 +504,9 @@ class NotionDatabaseManager:
         if direction is None:
             return None
 
-        return await self._get_item(request.client.host, direction)
+        client = client_override or request.client.host
+
+        return await self._get_item(client, direction)
 
 
     async def get_next_item(self, client_name: str) -> Optional[NotionQuote]:
