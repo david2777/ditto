@@ -1,211 +1,83 @@
-import os
-from math import ceil
-
-import cv2
-import numpy as np
 from loguru import logger
-from PIL import Image, ImageDraw, ImageFont
-from pykuwahara import kuwahara
+from wand.image import Image
 
-from ditto.utilities import wrap_text
-from ditto.constants import *
+from ditto import text_rendering
 
 
-def _lerp(a: float, b: float, t: float) -> float:
-    """Linearly interpolates between two values a and b based on a parameter t.
+def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
+                  quote: str, title: str, author: str) -> bool:
+    """Processes an image by performing resizing, cropping, color adjustments,
+    sharpening, dithering, adding text, and saving the output.
+
+    This function operates on an image, preparing it for e-ink display by adjusting
+    its dimensions, modulating color properties, sharpening details, applying a
+    specified dithering method, overlaying text, and saving the final output
+    to a specified path.
 
     Args:
-        a: The starting value.
-        b: The ending value.
-        t: The interpolation factor.
+        raw_path (str): Path to the input raw image file.
+        output_path (str): Path where the processed image will be saved.
+        dimensions (tuple[int, int]): Target dimensions (width, height) for
+            the output image.
+        quote (str): Quote to be added as a text overlay on the image.
+        title (str): Title to go with the quote.
+        author (str): Author name to be included with the quote and title.
 
     Returns:
-        float: The interpolated value based on the inputs a, b, and t.
+        bool: True if the image processing and saving operation completes
+        successfully.
     """
-    return a + (b - a) * t
+    with Image(filename=raw_path) as img:
+        if img.colorspace != 'srgb':
+            img.transform_colorspace('srgb')
 
-class DittoImage:
-    """Class representing a Ditto image.
+        # 1. RESIZE & CROP: Resize to the target dimensions, then crop to center.
+        orig_width = img.width
+        orig_height = img.height
 
-    """
-    image: np.ndarray = None
-    blur_size: int = 35
-    blur_sigma: float = 5.0
+        # First, resize to at least the width (we will crop height later)
+        scale_factor = dimensions[0] / float(orig_width)
+        new_width = int(orig_width * scale_factor)
+        new_height = int(orig_height * scale_factor)
 
-    file_path: str = None
-    width: int = None
-    height: int = None
+        # If the height is too small, resize up based on the height (we will crop later)
+        if new_height < dimensions[1]:
+            scale_factor = dimensions[1] / float(new_height)
+            new_width = int(new_width * scale_factor)
+            new_height = int(new_height * scale_factor)
 
-    def __init__(self, file_path: str, width: int, height: int):
-        """Initialize a Ditto image, loading the image from a file.
+        logger.debug(f"Original {orig_width}x{orig_height} resized to {new_width}x{new_height} before cropping")
+        img.resize(new_width, new_height)
 
-        Args:
-            file_path (str): Path to the image file to load.
-            width (int): Width of the image in pixels.
-            height (int): Height of the image in pixels.
-        """
-        self.file_path = file_path
-        self.width = width
-        self.height = height
-        self.image = cv2.imread(file_path)
+        img.gravity = 'center'  # Use 'center' gravity
+        img.crop(width=dimensions[0], height=dimensions[1])
 
-    def show(self, title: str = None):
-        """Display the image using cv2.imshow, used for debugging.
+        logger.info(f"Cropped to {img.width}x{img.height}")
 
-        Args:
-            title (str): Title of the window.
+        # 2. COLOR PREP: Compensate for the ink's reflectivity
+        # Modulate(brightness, saturation, hue)
+        img.modulate(115, 160, 100)
 
-        Returns:
-            None
-        """
-        title = title or "Image"
-        cv2.imshow(title, self.image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # Level(black_point, white_point, gamma)
+        # Lifting gamma to 1.2-1.5 helps prevent "muddy" shadows on e-ink
+        img.level(0.05, 0.95, gamma=1.3)
 
-    def write(self, file_path: str) -> bool:
-        """Write the image to a file.
+        # 3. SHARPENING: E-ink microcapsules have a slight bleed
+        # radius=0, sigma=1.0 gives a nice crisp edge for dithering
+        img.sharpen(radius=0, sigma=1.0)
 
-        Args:
-            file_path (str): Path to the image file to write.
+        # 4. TEXT: Add the quote and author text
+        text_data = text_rendering.render_text(dimensions, quote, title, author)
+        with Image.from_array(text_data) as text_image:
+            img.composite(text_image, left=0, top=0)
 
-        Returns:
-            bool: True if the image was written, False otherwise.
-        """
-        logger.info(f"Writing image to {file_path}")
-        if not self.image.any():
-            raise ValueError("Image not processed.")
+        # 5. REMAP & DITHER: Dither the image based on the palette.
+        with Image(filename="resources/palette_7.png") as palette:
+            # method options: 'floyd_steinberg', 'riemersma', or 'none'
+            img.remap(affinity=palette, method='floyd_steinberg')
 
-        check = cv2.imwrite(file_path, self.image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-        if not check and os.path.isdir(file_path):
-            os.rmdir(file_path)
+        # 6. SAVE: Save the image
+        img.compression_quality = 70
+        img.save(filename=output_path)
 
-        return check
-
-    def process(self, output_path: str, quote: str, title: str, author: str) -> bool:
-        """Process the image and save it to a file.
-
-        Args:
-            output_path (str): Path to the output file.
-            quote (str): Text of the quote to render onto the image.
-            title (str): Text of the title to render onto the image.
-            author (str): Text of the author's name to render onto the image.
-
-        Returns:
-            bool: True if the image was processed, False otherwise.
-        """
-        self._initial_resize()
-        self._enhance()
-        self._blur()
-        self._add_text(quote, title, author)
-        return self.write(output_path)
-
-    def _initial_resize(self):
-        """Resize the image to fit the required size.
-
-        Returns:
-            None
-        """
-        height, width = self.image.shape[:2]
-        logger.info(f"Input width={width}, height={height}")
-
-        # First resize to at least the height
-        scale_factor = self.height / float(height)
-        width = int(width * scale_factor)
-        height = int(height * scale_factor)
-
-        # If the width is still to small, resize up based on the width
-        if width < self.width:
-            scale_factor = self.width / float(width)
-            width = int(width * scale_factor)
-            height = int(height * scale_factor)
-
-        logger.info(f"Resize width={width}, height={height}")
-        self.image = cv2.resize(self.image, (width, height))
-
-        # Super basic top down crop, will update to be context-sensitive
-        logger.info(f"Crop width={self.width}, height={self.height}")
-        self.image = self.image[:self.height, :self.width]
-
-    def _enhance(self):
-        """Adjust the brightness, saturation, and contrast of the image to better display on the e-ink screen.
-
-        Returns:
-            None
-        """
-        hsv = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV).astype("float32")
-        h, s, v = cv2.split(hsv)
-        # Modify Saturation and Value
-        s = np.clip(s * SATURATION, 0, 255)
-        v = np.clip(v * BRIGHTNESS, 0, 255)
-        hsv = cv2.merge([h, s, v]).astype("uint8")
-        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
-        # Modify Gamma
-        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        l_float = (l.astype(np.float32) / 255.0) ** GAMMA
-        l_int = np.clip(l_float * 255, 0, 255).astype(np.uint8)
-        out = cv2.merge([l_int, a, b])
-
-        self.image = cv2.cvtColor(out, cv2.COLOR_LAB2BGR)
-
-    def _blur(self):
-        """Blur the image.
-
-        Returns:
-            None
-        """
-        self.image = cv2.GaussianBlur(self.image, (self.blur_size, self.blur_size), self.blur_sigma)
-        self.image = kuwahara(self.image, radius=KUWAHARA_RADIUS)
-
-    def _add_text(self, quote: str, title: str, author: str):
-        """Render the text onto the image.
-
-        Args:
-            quote (str): Text of the quote to render onto the image.
-            title (str): Text of the title to render onto the image.
-            author (str): Text of the author's name to render onto the image.
-
-        Returns:
-            None
-        """
-        # Convert image from cv2 format to PIL
-        rgb_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(rgb_image)
-
-        padding_w_pixels = int(PADDING_WIDTH * self.width)
-        padding_h_pixels = int(PADDING_HEIGHT * self.height)
-        quote_h_pixels = int(QUOTE_HEIGHT * self.height)
-        title_h_pixels = int(TITLE_HEIGHT * self.height)
-        author_h_pixels = int(AUTHOR_HEIGHT * self.height)
-
-        # Add quote
-        width = int(self.width - (padding_w_pixels * 2))
-        height = int(quote_h_pixels - (padding_h_pixels * 2))
-
-        font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
-        text, font = wrap_text.fit_text(quote, font, width, height)
-        quote_stroke = ceil(_lerp(0, 4, ((font.size - 24) / 24)))
-
-        draw = ImageDraw.Draw(pil_image)
-        xy = (padding_w_pixels, padding_h_pixels)
-        draw.text(xy, text, QUOTE_COLOR, font=font, align="center", stroke_width=quote_stroke, stroke_fill="black")
-
-        # Add Title
-        font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
-        font = wrap_text.fit_text_width(title, font, width, max_font_size=title_h_pixels)
-        xy = (self.width - padding_w_pixels, self.height - padding_h_pixels - author_h_pixels)
-        draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
-
-        # Add Author
-        author = f'- {author}'
-
-        font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
-        font = wrap_text.fit_text_width(author, font, width, max_font_size=author_h_pixels)
-        xy = (self.width - padding_w_pixels, self.height - padding_h_pixels)
-        draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
-
-        # Convert back to cv2 and back to BGR
-        self.image = np.asarray(pil_image)
-        self.image = cv2.cvtColor(self.image, cv2.COLOR_RGB2BGR)
+    return True

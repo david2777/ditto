@@ -1,13 +1,87 @@
+from math import ceil
 from typing import Optional, Tuple
 
+import numpy as np
 from loguru import logger
+from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
 
+from ditto.constants import *
 from ditto.utilities.timer import Timer
 
 
-def fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size: int = 24, max_font_size: int = 38,
-                   step_size: int = 1) -> FreeTypeFont:
+def render_text(dimensions: tuple[int, int], quote: str, title: str, author: str) -> np.ndarray:
+    """Renders a text-based image with a quote, title, and author overlaid on it. The function calculates dimensions
+    and positions for each text component, applies styling parameters based on preset configurations, and uses
+    Pillow for drawing text. The resulting image is returned as a numpy array.
+
+    Args:
+        dimensions: A tuple indicating the width and height of the image in pixels.
+        quote: A string containing the main quote to be rendered.
+        title: A string containing the title text to be displayed.
+        author: A string containing the author's name or attribution to be displayed.
+
+    Returns:
+        np.ndarray: A numpy array representing the rendered RGBA image.
+    """
+    pil_image = Image.new('RGBA', (dimensions[0], dimensions[1]), color=(0, 0, 0, 0))
+
+    # Calculate all of our pixel values
+    padding_w_pixels = int(PADDING_WIDTH * dimensions[0])
+    padding_h_pixels = int(PADDING_HEIGHT * dimensions[1])
+    quote_h_pixels = int(QUOTE_HEIGHT * dimensions[1])
+    title_h_pixels = int(TITLE_HEIGHT * dimensions[1])
+    author_h_pixels = int(AUTHOR_HEIGHT * dimensions[1])
+    logger.debug(f'pws={padding_w_pixels}, ph={padding_h_pixels}')
+
+    # Add quote
+    width = int(dimensions[0] - (padding_w_pixels * 2))
+    height = int(quote_h_pixels - (padding_h_pixels * 2))
+    logger.debug(f'w={width}, h={height}')
+
+    font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
+    text, font = _fit_text_bbox(quote, font, width, height)
+    quote_stroke = ceil(_lerp(1, 4, ((font.size - 24) / 24)))
+
+    draw = ImageDraw.Draw(pil_image)
+    xy = (padding_w_pixels, padding_h_pixels)
+    draw.text(xy, text, QUOTE_COLOR, font=font, align="center", stroke_width=quote_stroke, stroke_fill="black")
+
+    # Add Title
+    font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
+    font = _fit_text_width(title, font, width, max_font_size=title_h_pixels)
+    xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels - author_h_pixels)
+    draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
+
+    # Add Author
+    author = f'- {author}'
+
+    font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
+    font = _fit_text_width(author, font, width, max_font_size=author_h_pixels)
+    xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels)
+    logger.info(f"Drawing author {author} at xy={xy}")
+    draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
+
+    # Conver to np array and return
+    return np.array(pil_image)
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    """Linearly interpolates between two values a and b based on a parameter t.
+
+    Args:
+        a: The starting value.
+        b: The ending value.
+        t: The interpolation factor.
+
+    Returns:
+        float: The interpolated value based on the inputs a, b, and t.
+    """
+    return a + (b - a) * t
+
+
+def _fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size: int = 24, max_font_size: int = 38,
+                    step_size: int = 1) -> FreeTypeFont:
     """Attempted to fit in line of text to a maximum width, starting at the `max_font_size` and moving downwards
     by `step_size` steps until a match is found or `min_font_size` is reached.
 
@@ -17,7 +91,7 @@ def fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size:
         max_width (int): The maximum width of the text.
         min_font_size (int): The minimum font height in pixel, default is 28.
         max_font_size (int): The maximum font height in pixels, default is 38.
-        step_size (int): The amount of pixels to decrease on each attempt.
+        step_size (int): The number of pixels to decrease on each attempt.
 
     Returns:
         FreeTypeFont: The font size to fit the text to the given width.
@@ -39,8 +113,8 @@ def fit_text_width(text: str, font: FreeTypeFont, max_width: int, min_font_size:
     return font.font_variant(size=min_font_size)
 
 
-def fit_text(text: str, font: FreeTypeFont, max_width: int, max_height: int, spacing: int = 4,
-             min_font_size: int = 24, max_font_size: int = 48, step_size: int = 1) -> Tuple[str, FreeTypeFont]:
+def _fit_text_bbox(text: str, font: FreeTypeFont, max_width: int, max_height: int, spacing: int = 4,
+                   min_font_size: int = 24, max_font_size: int = 48, step_size: int = 1) -> Tuple[str, FreeTypeFont]:
     """Scale text to a given rectangle, starting at the `max_size` and working downward by the `step_size` until a
     match is found or `min_font_size` is reached.
 

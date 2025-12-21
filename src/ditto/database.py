@@ -301,9 +301,9 @@ class NotionQuote:
                 raise NotImplementedError(f"Fallback Image Not Implemented")
 
         t = Timer()
-        image = image_processing.DittoImage(self.image_path_raw.as_posix(), width, height)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        result = image.process(output_path.as_posix(), self.quote, self.title, self.author)
+        result = image_processing.process_image(self.image_path_raw.as_posix(), output_path.as_posix(),
+                                                (width, height), self.quote, self.title, self.author)
         if result:
             logger.debug(f'Took {t.get_elapsed_time()} to process image: {output_path.as_posix()}')
         else:
