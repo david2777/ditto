@@ -20,15 +20,18 @@ notion_api = AsyncClient(auth=secrets.NOTION_KEY)
 
 
 class QueryDirection(StrEnum):
+    CURRENT = '/current'
     FORWARD = '/next'
     REVERSE = '/previous'
     RANDOM = '/random'
 
     @staticmethod
     def from_request(request: Request):
+        if request.url.path == '/current':
+            return QueryDirection.CURRENT
         if request.url.path == '/next':
             return QueryDirection.FORWARD
-        if request.url.path == '/next':
+        if request.url.path == '/previous':
             return QueryDirection.REVERSE
         if request.url.path == '/random':
             return QueryDirection.RANDOM
@@ -147,7 +150,9 @@ class Client:
             None
         """
         before = self._index
-        if direction == QueryDirection.FORWARD:
+        if direction == QueryDirection.CURRENT:
+            pass
+        elif direction == QueryDirection.FORWARD:
             self._index += 1
             if self._index > self._cache_size - 1:
                 self._index = 0
@@ -484,11 +489,13 @@ class NotionDatabaseManager:
         page_id = self._page_id_cache[index]
         return await self.fetch_page(page_id)
 
-    async def get_item_from_request(self, request: Request) -> Optional[NotionQuote]:
+    async def get_item_from_request(self, request: Request,
+                                    client_override: Optional[str] = None) -> Optional[NotionQuote]:
         """Return an item from the database based on the request.
 
         Args:
             request (Request): The request object.
+            client_override (str, optional): Override the client name from the request. Defaults to None.
 
         Returns:
             Optional[NotionQuote]: An item from the database if found, None otherwise.
