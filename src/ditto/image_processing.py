@@ -71,14 +71,14 @@ def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
         with Image.from_array(text_data) as text_image:
             img.composite(text_image, left=0, top=0)
 
-        # 5. REMAP & DITHER: Dither the image based on the palette.
-        with Image(filename="resources/palette_7.png") as palette:
-            # method options: 'floyd_steinberg', 'riemersma', or 'none'
-            img.remap(affinity=palette, method='floyd_steinberg')
+        # # 5. REMAP & DITHER: Dither the image based on the palette.
+        # with Image(filename="resources/palette_7.png") as palette:
+        #     # method options: 'floyd_steinberg', 'riemersma', or 'none'
+        #     img.remap(affinity=palette, method='floyd_steinberg')
 
         # 6. SAVE: Save the image
         img.compression_quality = 70
-        img.interlace_scheme = 'no'
+        # img.interlace_scheme = 'no'
         # img.options['jpeg:sampling-factor'] = '1x1,1x1,1x1'
         img.save(filename=output_path)
 
