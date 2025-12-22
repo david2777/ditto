@@ -77,9 +77,9 @@ def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
             img.remap(affinity=palette, method='floyd_steinberg')
 
         # 6. SAVE: Save the image
-        img.compression_quality = 98
+        img.compression_quality = 70
         img.interlace_scheme = 'no'
-        img.options['jpeg:sampling-factor'] = '1x1,1x1,1x1'
+        # img.options['jpeg:sampling-factor'] = '1x1,1x1,1x1'
         img.save(filename=output_path)
 
     return True
