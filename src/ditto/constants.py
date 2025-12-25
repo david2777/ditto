@@ -23,6 +23,7 @@ AUTHOR_FONT_INDEX = 0
 # App
 OUTPUT_DIR = 'data'
 CACHE_ENABLED = False
+USE_STATIC_BG = True
 
 
 def _get_toml_data():

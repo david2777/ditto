@@ -1,4 +1,6 @@
 import asyncio
+import os.path
+
 import requests
 from enum import StrEnum
 from pathlib import Path
@@ -295,21 +297,25 @@ class NotionQuote:
         """
         width = width or constants.DEFAULT_WIDTH
         height = height or constants.DEFAULT_HEIGHT
+        fallback_image_path = Path.cwd() / Path('resources/fallback.png')
 
         output_path = self.get_image_path_processed(width, height)
+        image_path_raw = self.image_path_raw
 
         if output_path.is_file() and constants.CACHE_ENABLED:
             return output_path
 
-        if not self.image_path_raw.is_file():
+        if constants.USE_STATIC_BG:
+            image_path_raw = fallback_image_path
+        elif not image_path_raw.is_file():
             if self._image_url:
                 await self.download_image()
             else:
-                raise NotImplementedError(f"Fallback Image Not Implemented")
+                image_path_raw = fallback_image_path
 
         t = Timer()
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        result = image_processing.process_image(self.image_path_raw.as_posix(), output_path.as_posix(),
+        result = image_processing.process_image(image_path_raw.as_posix(), output_path.as_posix(),
                                                 (width, height), self.quote, self.title, self.author)
         if result:
             logger.debug(f'Took {t.get_elapsed_time()} to process image: {output_path.as_posix()}')
