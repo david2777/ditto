@@ -202,8 +202,10 @@ class NotionQuote:
     author: str
     image_expiry_time: Optional[datetime]
     _image_url: Optional[str]
+    _raw_data = {}
 
     def __init__(self, page: dict, image_block: Optional[dict] = None):
+        self._raw_data = page
         self.page_id = page['id']
         quote = ''
         for part in page['properties']['Name']['title']:
@@ -383,7 +385,7 @@ class NotionDatabaseManager:
         previous_count = len(self._page_id_cache)
         self.clear_page_id_cache()
         for db_item in results:
-            if not any([db_item['archived'], db_item['in_trash']]):
+            if db_item['properties']['DISPLAY']['checkbox'] and not any([db_item['archived'], db_item['in_trash']]):
                 self._page_id_cache.append(db_item['id'])
 
         new_count = len(self._page_id_cache)
