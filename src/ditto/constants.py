@@ -1,3 +1,26 @@
+from enum import StrEnum
+from requests import Request
+
+
+class QueryDirection(StrEnum):
+    CURRENT = '/current'
+    FORWARD = '/next'
+    REVERSE = '/previous'
+    RANDOM = '/random'
+
+    @staticmethod
+    def from_request(request: Request):
+        if request.url.path == '/current':
+            return QueryDirection.CURRENT
+        if request.url.path == '/next':
+            return QueryDirection.FORWARD
+        if request.url.path == '/previous':
+            return QueryDirection.REVERSE
+        if request.url.path == '/random':
+            return QueryDirection.RANDOM
+        else:
+            return None
+
 # Image Formatting
 DEFAULT_WIDTH = 800
 DEFAULT_HEIGHT = 480
