@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     notion_key: str
     notion_database_id: str
+    database_url: str = "sqlite:///quotes.db"
 
     # Image Formatting
     default_width: int = 800

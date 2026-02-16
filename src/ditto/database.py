@@ -208,7 +208,7 @@ class QuoteManager:
         SQLAlchemy database URL.  Defaults to a local SQLite file ``quotes.db``.
     """
 
-    def __init__(self, db_url: str = "sqlite:///quotes.db"):
+    def __init__(self, db_url: str = settings.database_url):
         self.db_url = db_url
         self.engine = create_engine(db_url)
         Base.metadata.create_all(self.engine)
