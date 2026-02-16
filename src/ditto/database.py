@@ -126,6 +126,7 @@ class ClientSequence(Base):
 # 2. The Engine Manager
 class QuoteManager:
     def __init__(self, db_url: str = "sqlite:///quotes.db"):
+        self.db_url = db_url
         self.engine = create_engine(db_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)

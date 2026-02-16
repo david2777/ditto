@@ -3,11 +3,12 @@ import os
 import time
 import platform
 from typing import *
-from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import Optional, List, Union
+from pathlib import Path
 from collections import deque
 from pydantic import BaseModel
+from datetime import datetime, timedelta
+from typing import Optional, List, Union
+from contextlib import asynccontextmanager
 
 from loguru import logger
 from fastapi import FastAPI, Request
@@ -155,12 +156,12 @@ async def root_endpoint(request: Request) -> ServerStatus:
         database={
             "client_count": client_count,
             "quote_count": quote_count,
-            "database_file": "quotes.db" # simplified
+            "database_file": quote_manager.db_url
         },
         config={
             "cache_enabled": constants.CACHE_ENABLED,
             "static_bg": constants.USE_STATIC_BG,
-            "output_dir": str(constants.OUTPUT_DIR)
+            "output_dir": Path(constants.OUTPUT_DIR).resolve().as_posix()
         },
         recent_connections=list(RECENT_CONNECTIONS)
     )
