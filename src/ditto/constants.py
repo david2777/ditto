@@ -59,7 +59,7 @@ def _get_toml_data():
 
 
 TOML_DATA = _get_toml_data()
-PROJECT_NAME = TOML_DATA["project"]["version"]
+PROJECT_NAME = TOML_DATA["project"]["name"]
 PROJECT_DESCRIPTION = TOML_DATA["project"]["description"]
 VERSION = TOML_DATA["project"]["version"]
 
