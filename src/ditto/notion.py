@@ -6,11 +6,11 @@ from datetime import datetime
 from loguru import logger
 from notion_client import AsyncClient, APIResponseError
 
-from ditto import constants, credentials
+from ditto import config
 
-OUTPUT_DIR = Path(constants.OUTPUT_DIR).resolve()
+OUTPUT_DIR = Path(config.settings.output_dir).resolve()
 
-notion_api = AsyncClient(auth=credentials.settings.notion_key)
+notion_api = AsyncClient(auth=config.settings.notion_key)
 
 
 class NotionError(RuntimeError):
@@ -170,7 +170,7 @@ async def sync_notion_db(quote_manager):
     """
     logger.info("Starting Notion sync...")
 
-    raw_pages = await fetch_all_pages(credentials.settings.notion_database_id)
+    raw_pages = await fetch_all_pages(config.settings.notion_database_id)
 
     synced_count = 0
     skipped_count = 0

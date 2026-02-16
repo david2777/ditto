@@ -6,22 +6,7 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
 
-from ditto.constants import (
-    AUTHOR_COLOR,
-    AUTHOR_FONT,
-    AUTHOR_FONT_INDEX,
-    AUTHOR_HEIGHT,
-    PADDING_HEIGHT,
-    PADDING_WIDTH,
-    QUOTE_COLOR,
-    QUOTE_FONT,
-    QUOTE_FONT_INDEX,
-    QUOTE_HEIGHT,
-    TITLE_COLOR,
-    TITLE_FONT,
-    TITLE_FONT_INDEX,
-    TITLE_HEIGHT,
-)
+from ditto.config import settings
 from ditto.utilities.timer import Timer
 
 
@@ -42,36 +27,37 @@ def render_text(dimensions: tuple[int, int], quote: str, title: str, author: str
     pil_image = Image.new("RGBA", (dimensions[0], dimensions[1]), color=(0, 0, 0, 0))
 
     # Calculate all of our pixel values
-    padding_w_pixels = int(PADDING_WIDTH * dimensions[0])
-    padding_h_pixels = int(PADDING_HEIGHT * dimensions[1])
-    quote_h_pixels = int(QUOTE_HEIGHT * dimensions[1])
-    title_h_pixels = int(TITLE_HEIGHT * dimensions[1])
-    author_h_pixels = int(AUTHOR_HEIGHT * dimensions[1])
+    # Calculate all of our pixel values
+    padding_w_pixels = int(settings.padding_width * dimensions[0])
+    padding_h_pixels = int(settings.padding_height * dimensions[1])
+    quote_h_pixels = int(settings.quote_height * dimensions[1])
+    title_h_pixels = int(settings.title_height * dimensions[1])
+    author_h_pixels = int(settings.author_height * dimensions[1])
 
     # Add quote
     safe_width = int(dimensions[0] - (padding_w_pixels * 2))
     safe_quote_height = int(quote_h_pixels - (padding_h_pixels * 2) - 8)
 
-    font = ImageFont.truetype(QUOTE_FONT, index=QUOTE_FONT_INDEX)
+    font = ImageFont.truetype(settings.quote_font, index=settings.quote_font_index)
     text, font = _fit_text_bbox(quote, font, safe_width, safe_quote_height)
     quote_stroke = ceil(_lerp(1, 4, ((font.size - 24) / 24)))
 
     draw = ImageDraw.Draw(pil_image)
     xy = (padding_w_pixels, padding_h_pixels)
-    draw.text(xy, text, QUOTE_COLOR, font=font, align="center", stroke_width=quote_stroke, stroke_fill="black")
+    draw.text(xy, text, settings.quote_color, font=font, align="center", stroke_width=quote_stroke, stroke_fill="black")
 
     # Add Title
-    font = ImageFont.truetype(TITLE_FONT, title_h_pixels, index=TITLE_FONT_INDEX)
+    font = ImageFont.truetype(settings.title_font, title_h_pixels, index=settings.title_font_index)
     font = _fit_text_width(title, font, safe_width, max_font_size=title_h_pixels)
     xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels - author_h_pixels)
-    draw.text(xy, title, TITLE_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
+    draw.text(xy, title, settings.title_color, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
 
     # Add Author
-    font = ImageFont.truetype(AUTHOR_FONT, author_h_pixels, index=AUTHOR_FONT_INDEX)
+    font = ImageFont.truetype(settings.author_font, author_h_pixels, index=settings.author_font_index)
     font = _fit_text_width(author, font, safe_width, max_font_size=author_h_pixels)
     xy = (dimensions[0] - padding_w_pixels, dimensions[1] - padding_h_pixels)
     logger.info(f"Drawing author {author} at xy={xy}")
-    draw.text(xy, author, AUTHOR_COLOR, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
+    draw.text(xy, author, settings.author_color, font=font, anchor="rd", stroke_width=2, stroke_fill="black")
 
     # Conver to np array and return
     return np.array(pil_image)

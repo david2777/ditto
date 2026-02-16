@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from ditto import constants, database
+from ditto.config import settings
 from ditto.lifecycle import quote_manager, lifespan, START_TIME, RECENT_CONNECTIONS
 from ditto.schemas import ConnectionInfo, ServerStatus, ClientCreate, ClientUpdate, ClientInfo
 from ditto.utilities.timer import Timer
@@ -56,8 +57,8 @@ async def _process_quote(
             return JSONResponse(status_code=404, content={"message": "No quotes available"})
 
         # Resolve effective dimensions: query args > stored client defaults
-        effective_width = width or (client.default_width if client else constants.DEFAULT_WIDTH)
-        effective_height = height or (client.default_height if client else constants.DEFAULT_HEIGHT)
+        effective_width = width or (client.default_width if client else settings.default_width)
+        effective_height = height or (client.default_height if client else settings.default_height)
 
         # Process image using the effective dimensions
         image_path = quote_item.process_image(effective_width, effective_height)
@@ -123,9 +124,9 @@ async def root_endpoint(request: Request) -> ServerStatus:
         },
         database=quote_manager.get_stats(),
         config={
-            "cache_enabled": constants.CACHE_ENABLED,
-            "static_bg": constants.USE_STATIC_BG,
-            "output_dir": Path(constants.OUTPUT_DIR).resolve().as_posix(),
+            "cache_enabled": settings.cache_enabled,
+            "static_bg": settings.use_static_bg,
+            "output_dir": Path(settings.output_dir).resolve().as_posix(),
         },
         recent_connections=list(RECENT_CONNECTIONS),
     )

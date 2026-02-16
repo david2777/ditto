@@ -9,11 +9,12 @@ from loguru import logger
 from sqlalchemy import String, ForeignKey, Integer, DateTime, create_engine, select, func, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session, sessionmaker
 
-from ditto import constants, image_processing
+from ditto import image_processing
+from ditto.config import settings
 from ditto.constants import QueryDirection
 from ditto.utilities.timer import Timer
 
-OUTPUT_DIR = Path(constants.OUTPUT_DIR).resolve()
+OUTPUT_DIR = Path(settings.output_dir).resolve()
 
 
 # 1. Setup Base and Models
@@ -96,26 +97,26 @@ class Quote(Base):
 
         If a raw image does not exist locally it will be downloaded first.  When no image is
         available at all, a bundled fallback image is used instead.  Results are cached on disk
-        when ``constants.CACHE_ENABLED`` is ``True``.
+        when ``settings.cache_enabled`` is ``True``.
 
         Args:
-            width: Target width in pixels.  Defaults to ``constants.DEFAULT_WIDTH``.
-            height: Target height in pixels.  Defaults to ``constants.DEFAULT_HEIGHT``.
+            width: Target width in pixels.  Defaults to ``settings.default_width``.
+            height: Target height in pixels.  Defaults to ``settings.default_height``.
 
         Returns:
             The path to the processed image file, or ``None`` if processing failed.
         """
-        width = width or constants.DEFAULT_WIDTH
-        height = height or constants.DEFAULT_HEIGHT
+        width = width or settings.default_width
+        height = height or settings.default_height
         fallback_image_path = Path.cwd() / Path("resources/fallback.png")
 
         output_path = self.get_image_path_processed(width, height)
         image_path_raw = self.image_path_raw
 
-        if output_path.is_file() and constants.CACHE_ENABLED:
+        if output_path.is_file() and settings.cache_enabled:
             return output_path
 
-        if constants.USE_STATIC_BG:
+        if settings.use_static_bg:
             image_path_raw = fallback_image_path
         elif not image_path_raw.is_file():
             if self.image_url:
@@ -166,8 +167,8 @@ class Client(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     client_name: Mapped[str] = mapped_column(String, unique=True)
     current_position: Mapped[int] = mapped_column(Integer, default=-1)
-    default_width: Mapped[int] = mapped_column(Integer, default=constants.DEFAULT_WIDTH)
-    default_height: Mapped[int] = mapped_column(Integer, default=constants.DEFAULT_HEIGHT)
+    default_width: Mapped[int] = mapped_column(Integer, default=settings.default_width)
+    default_height: Mapped[int] = mapped_column(Integer, default=settings.default_height)
 
     # Relationship to their specific shuffled deck
     sequence: Mapped[List["ClientSequence"]] = relationship(back_populates="client")
@@ -224,7 +225,7 @@ class QuoteManager:
                     conn.execute(
                         text(
                             "ALTER TABLE clients ADD COLUMN default_width"
-                            f" INTEGER NOT NULL DEFAULT {constants.DEFAULT_WIDTH}"
+                            f" INTEGER NOT NULL DEFAULT {settings.default_width}"
                         )
                     )
                     logger.info("Migrated clients table: added default_width column")
@@ -232,7 +233,7 @@ class QuoteManager:
                     conn.execute(
                         text(
                             f"ALTER TABLE clients ADD COLUMN default_height"
-                            f" INTEGER NOT NULL DEFAULT {constants.DEFAULT_HEIGHT}"
+                            f" INTEGER NOT NULL DEFAULT {settings.default_height}"
                         )
                     )
                     logger.info("Migrated clients table: added default_height column")
@@ -309,8 +310,8 @@ class QuoteManager:
 
         Args:
             client_name: Unique name identifying the client.
-            width: Default display width in pixels.  Falls back to ``constants.DEFAULT_WIDTH``.
-            height: Default display height in pixels.  Falls back to ``constants.DEFAULT_HEIGHT``.
+            width: Default display width in pixels.  Falls back to ``settings.default_width``.
+            height: Default display height in pixels.  Falls back to ``settings.default_height``.
 
         Returns:
             The newly created or pre-existing :class:`Client` instance.
@@ -326,8 +327,8 @@ class QuoteManager:
             # Create new client with optional custom dimensions
             new_client = Client(
                 client_name=client_name,
-                default_width=width or constants.DEFAULT_WIDTH,
-                default_height=height or constants.DEFAULT_HEIGHT,
+                default_width=width or settings.default_width,
+                default_height=height or settings.default_height,
             )
             session.add(new_client)
             session.flush()  # Get the ID before committing
@@ -430,8 +431,8 @@ class QuoteManager:
 
         Args:
             client_name: Unique name identifying the client.
-            width: Default display width in pixels.  Falls back to ``constants.DEFAULT_WIDTH``.
-            height: Default display height in pixels.  Falls back to ``constants.DEFAULT_HEIGHT``.
+            width: Default display width in pixels.  Falls back to ``settings.default_width``.
+            height: Default display height in pixels.  Falls back to ``settings.default_height``.
 
         Returns:
             The newly created or pre-existing :class:`Client` instance.

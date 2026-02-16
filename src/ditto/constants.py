@@ -22,34 +22,6 @@ class QueryDirection(StrEnum):
             return None
 
 
-# Image Formatting
-DEFAULT_WIDTH = 800
-DEFAULT_HEIGHT = 480
-
-PADDING_WIDTH = 0.0250  # 2.5% width
-PADDING_HEIGHT = 0.0250  # 2.5% height * 4 = 10% total
-
-QUOTE_HEIGHT = 0.775  # 77.5% height
-QUOTE_COLOR = "white"
-QUOTE_FONT = "resources/fonts/Charter.ttc"
-QUOTE_FONT_INDEX = 3
-
-TITLE_HEIGHT = 0.075  # 7.5% height
-TITLE_COLOR = "white"
-TITLE_FONT = "resources/fonts/Charter.ttc"
-TITLE_FONT_INDEX = 0
-
-AUTHOR_HEIGHT = 0.05  # 5% height
-AUTHOR_COLOR = "white"
-AUTHOR_FONT = "resources/fonts/Charter.ttc"
-AUTHOR_FONT_INDEX = 0
-
-# App
-OUTPUT_DIR = "data"
-CACHE_ENABLED = False
-USE_STATIC_BG = False
-
-
 def _get_toml_data():
     import tomllib
 
