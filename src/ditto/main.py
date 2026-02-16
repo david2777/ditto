@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from ditto import constants, database
 from ditto.lifecycle import quote_manager, lifespan, START_TIME, RECENT_CONNECTIONS
-from ditto.schemas import ConnectionInfo, ServerStatus, ClientCreate, ClientInfo
+from ditto.schemas import ConnectionInfo, ServerStatus, ClientCreate, ClientUpdate, ClientInfo
 from ditto.utilities.timer import Timer
 
 app = FastAPI(**constants.APP_META, lifespan=lifespan)
@@ -256,3 +256,40 @@ async def list_clients_endpoint() -> JSONResponse:
                 for c in clients
             ]
         )
+
+
+@app.patch(
+    "/clients/{client_id}",
+    summary="Update Client",
+    description="Update an existing client's default width, height, and/or position",
+    response_model=ClientInfo,
+)
+async def update_client_endpoint(client_id: int, body: ClientUpdate) -> JSONResponse:
+    """Update a client's stored settings.
+
+    Only fields present in the request body are modified.
+
+    Args:
+        client_id: The database primary key of the client to update.
+        body: The request body containing the fields to update.
+
+    Returns:
+        A 200 response with the updated client details, or 404 if the client was not found.
+    """
+    client = quote_manager.update_client(
+        client_id=client_id,
+        width=body.width,
+        height=body.height,
+        position=body.position,
+    )
+    if not client:
+        return JSONResponse(status_code=404, content={"message": f"Client {client_id} not found"})
+    return JSONResponse(
+        content={
+            "id": client.id,
+            "client_name": client.client_name,
+            "default_width": client.default_width,
+            "default_height": client.default_height,
+            "current_position": client.current_position,
+        },
+    )

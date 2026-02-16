@@ -35,6 +35,14 @@ class ClientCreate(BaseModel):
     height: Optional[int] = Field(None, description="Default image height in pixels for this client.")
 
 
+class ClientUpdate(BaseModel):
+    """Request body for updating an existing client's settings."""
+
+    width: Optional[int] = Field(None, description="New default image width in pixels.")
+    height: Optional[int] = Field(None, description="New default image height in pixels.")
+    position: Optional[int] = Field(None, description="New current position in the quote rotation.")
+
+
 class ClientInfo(BaseModel):
     """Response model for a single client."""
 

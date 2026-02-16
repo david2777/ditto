@@ -438,6 +438,41 @@ class QuoteManager:
         """
         return self.register_client(client_name, width=width, height=height)
 
+    def update_client(
+        self,
+        client_id: int,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        position: Optional[int] = None,
+    ) -> Optional[Client]:
+        """Update an existing client's default dimensions and/or current position.
+
+        Only non-``None`` arguments are applied.
+
+        Args:
+            client_id: Primary key of the client to update.
+            width: New default display width in pixels.
+            height: New default display height in pixels.
+            position: New current position in the quote rotation.
+
+        Returns:
+            The updated :class:`Client`, or ``None`` if no client with that ID exists.
+        """
+        with self.Session() as session:
+            client = session.get(Client, client_id)
+            if not client:
+                return None
+            if width is not None:
+                client.default_width = width
+            if height is not None:
+                client.default_height = height
+            if position is not None:
+                client.current_position = position
+            session.commit()
+            # Expunge so the object is usable outside the session
+            session.expunge(client)
+            return client
+
     def get_quote(
         self,
         client_name: str,

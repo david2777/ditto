@@ -31,6 +31,7 @@ My wife has a Notion database of quotes from her favorite books. I thought it wo
 * `GET /previous`: Moves backwards to and returns the previous quote.
 * `GET /random`: Returns a random quote and moves to that position.
 * `POST /clients`: Pre-register a new client with optional default `width` and `height`.
+* `PATCH /clients/{client_id}`: Update a client's default `width`, `height`, and/or `position`.
 * `GET /clients`: List all registered clients and their stored defaults.
 * `GET /health`: Health check endpoint.
 
@@ -52,6 +53,18 @@ Clients can be pre-registered via `POST /clients` with a JSON body:
 ```
 
 If `width` or `height` are omitted the global defaults (`800×480`) are used. Clients are also auto-registered on their first request to any quote endpoint.
+
+### Updating a Client
+
+Use `PATCH /clients/{client_id}` to update a client's settings. All fields are optional — only supplied fields are modified:
+
+```json
+{
+  "width": 1024,
+  "height": 600,
+  "position": 0
+}
+```
 
 ## Inky Frame Client (Ditto View)
 
