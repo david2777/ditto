@@ -1,5 +1,13 @@
+import sys
+import os
+import time
+import platform
 from typing import *
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import Optional, List, Union
+from collections import deque
+from pydantic import BaseModel
 
 from loguru import logger
 from fastapi import FastAPI, Request
@@ -10,6 +18,25 @@ from ditto.utilities.timer import Timer
 
 # Initialize QuoteManager
 quote_manager = database.QuoteManager()
+
+# Global State
+START_TIME = time.time()
+RECENT_CONNECTIONS = deque(maxlen=10)
+
+class ConnectionInfo(BaseModel):
+    client: str
+    timestamp: datetime
+    method: str
+    path: str
+    quote_id: Optional[str] = None
+    processing_time_ms: float
+
+class ServerStatus(BaseModel):
+    system: dict
+    app: dict
+    database: dict
+    config: dict
+    recent_connections: List[ConnectionInfo]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,6 +69,7 @@ async def _process_quote(request: Request, client_override: Optional[str] = None
     Returns:
         Union[FileResponse, JSONResponse]: The resulting file response.
     """
+    start_proc = time.time()
     try:
         t = Timer()
         logger.info(f"request: {request.method} {request.url} from {request.client.host}")
@@ -70,6 +98,17 @@ async def _process_quote(request: Request, client_override: Optional[str] = None
         response.headers["Expires"] = "0"
 
         logger.info(f'response: "{response.path}" generated in {t.get_elapsed_time()} seconds')
+        
+        # Track connection
+        elapsed_ms = (time.time() - start_proc) * 1000
+        RECENT_CONNECTIONS.append(ConnectionInfo(
+            client=client_name,
+            timestamp=datetime.now(),
+            method=request.method,
+            path=request.url.path,
+            quote_id=quote_item.id,
+            processing_time_ms=elapsed_ms
+        ))
 
         return response
     except Exception:
@@ -77,40 +116,57 @@ async def _process_quote(request: Request, client_override: Optional[str] = None
         return JSONResponse(status_code=500, content={"message": "Internal server error"})
 
 
-@app.get("/", summary="Server State", description="Return basic state information")
-async def root_endpoint(request: Request) -> JSONResponse:
+@app.get("/", summary="Server State", description="Return basic state information", response_model=ServerStatus)
+async def root_endpoint(request: Request) -> ServerStatus:
     """Return basic state information.
 
     Args:
         request (Request): Request object.
 
     Returns:
-        JSONResponse: Basic state information.
+        ServerStatus: Basic state information.
     """
     logger.info(f"request: {request.method} {request.url}")
-    headers = {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-    }
     
-    # We might need to query the DB to get stats, or just omit for now.
-    # To keep it simple, I'll count quotes in the DB.
+    # Database Stats
     try:
         with quote_manager.Session() as session:
             client_count = session.query(database.Client).count()
             quote_count = session.query(database.Quote).count()
     except Exception:
-        client_count = 0
-        quote_count = 0
+        client_count = -1
+        quote_count = -1
 
-    response = {'application': 'ditto',
-                'version': constants.VERSION,
-                'clients': client_count,
-                'quote_count': quote_count
-    }
-    logger.info(f"response: {response}")
-    return JSONResponse(content=response, headers=headers, status_code=200)
+    uptime_seconds = time.time() - START_TIME
+
+    status = ServerStatus(
+        system={
+            "platform": platform.system(),
+            "platform_release": platform.release(),
+            "python_version": sys.version.split()[0],
+            "hostname": platform.node()
+        },
+        app={
+            "name": "ditto",
+            "version": constants.VERSION,
+            "uptime_seconds": uptime_seconds,
+            "uptime_human": str(timedelta(seconds=int(uptime_seconds))) if 'timedelta' in globals() else f"{int(uptime_seconds)}s"
+        },
+        database={
+            "client_count": client_count,
+            "quote_count": quote_count,
+            "database_file": "quotes.db" # simplified
+        },
+        config={
+            "cache_enabled": constants.CACHE_ENABLED,
+            "static_bg": constants.USE_STATIC_BG,
+            "output_dir": str(constants.OUTPUT_DIR)
+        },
+        recent_connections=list(RECENT_CONNECTIONS)
+    )
+
+    logger.info(f"response: {status}")
+    return status
 
 
 @app.get("/current", summary="Current Quote", description="Return the current quote for this client", **image_meta)
