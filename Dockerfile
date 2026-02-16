@@ -1,8 +1,8 @@
 FROM ghcr.io/astral-sh/uv:0.6.11-python3.12-bookworm-slim
 
 LABEL maintainer="daduvo11@gmail.com" \
-      description="Ditto - A Notion-based quote service" \
-      version="1.1.7"
+  description="Ditto - A Notion-based quote service" \
+  version="1.1.7"
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
@@ -11,12 +11,12 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
-    curl \
-    imagemagick \
-    libmagickwand-dev \
-    && rm -rf /var/lib/apt/lists/*
+  gcc \
+  python3-dev \
+  curl \
+  imagemagick \
+  libmagickwand-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY . /app
@@ -28,7 +28,7 @@ RUN uv pip install --system --no-cache .
 EXPOSE 8000
 
 # Set up health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=300s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
