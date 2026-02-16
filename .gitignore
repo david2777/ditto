@@ -1,6 +1,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python,pycharm,opencv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,pycharm,opencv
 
+quotes.db
+
 # Working temp data
 data/
 

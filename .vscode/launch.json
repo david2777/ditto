@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Debug Uvicorn",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "ditto.main:app",
+                "--reload",
+                "--port",
+                "8000"
+            ],
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}
