@@ -34,6 +34,25 @@ My wife has a Notion database of quotes from her favorite books. I thought it wo
 
 `current`, `next`, `previous`, and `random` all allow a query arg `client_override` to specify the client name. This is useful for testing or if you want to manually control the rotation for a specific client. The `width` and `height` query args can be used to specify the width and height of the image. 
 
+## Inky Frame Client (Ditto View)
+
+The `src/ditto_view` directory contains the Python code specifically designed to run on the Pimoroni Inky Frame (Raspberry Pi Pico2 W based). This code fetches the images from the Ditto server and displays them.
+
+### Key Files
+
+*   `main.py`: The entry point for the MicroPython environment. It connects to Wi-Fi, fetches the image, and handles deep sleep to conserve battery.
+*   `inky_frame.py`: Contains the logic for interacting with the Inky Frame hardware, including initializing the display and drawing the image.
+*   `inky_helper.py`: Helper functions for network connectivity and power management.
+*   `secrets.py`: A template file for your Wi-Fi credentials (`WIFI_SSID` and `WIFI_PASSWORD`). You will need to fill this in before deploying to the device.
+
+### Deployment
+
+To deploy this code to your Inky Frame:
+
+1.  Connect your Inky Frame to your computer via USB.
+2.  Copy the files from `src/ditto_view` to the root of the Inky Frame's storage.
+3.  Update `secrets.py` on the device with your actual Wi-Fi credentials.
+
 ## Getting Started
 
 ### Notion Database
