@@ -13,6 +13,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-NOTION_KEY = settings.notion_key
-NOTION_DATABASE_ID = settings.notion_database_id
