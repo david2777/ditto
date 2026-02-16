@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 import time
 import platform
 from typing import *
@@ -39,6 +40,30 @@ class ServerStatus(BaseModel):
     config: dict
     recent_connections: List[ConnectionInfo]
 
+async def schedule_daily_sync():
+    """Background task to sync the Notion database every day at midnight."""
+    while True:
+        # Calculate time until next midnight
+        now = datetime.now()
+        tomorrow = now + timedelta(days=1)
+        next_run = datetime(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=0, minute=0, second=0)
+        
+        sleep_duration = (next_run - now).total_seconds()
+        logger.info(f"Next Notion sync scheduled in {sleep_duration:.2f} seconds (at {next_run})")
+        
+        try:
+            await asyncio.sleep(sleep_duration)
+            logger.info("Starting scheduled daily Notion sync...")
+            await notion.sync_notion_db(quote_manager)
+            logger.info("Daily Notion sync completed.")
+        except asyncio.CancelledError:
+            logger.info("Daily sync task cancelled.")
+            raise
+        except Exception as e:
+            logger.error(f"Error in daily sync task: {e}")
+            # Prevent rapid failure loops
+            await asyncio.sleep(60)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Sync data from Notion
@@ -47,8 +72,23 @@ async def lifespan(app: FastAPI):
         await notion.sync_notion_db(quote_manager)
     except Exception as e:
         logger.error(f"Failed to sync Notion data on startup: {e}")
+
+    # Start daily sync task
+    sync_task = asyncio.create_task(schedule_daily_sync())
+
+    # Yield control to the application
     yield
-    # Shutdown logic if needed
+    
+    # Handle shutdown
+    logger.info("Shutting down: Cancelling background tasks...")
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        logger.info("Daily sync task cancelled successfully.")
+    except Exception as e:
+        # Catch unexpected crashes that happened during the task's life
+        logger.error(f"Daily sync task failed with an error: {e}")
 
 app = FastAPI(**constants.APP_META, lifespan=lifespan)
 
