@@ -259,6 +259,21 @@ class QuoteManager:
 
             session.commit()
 
+    def get_stats(self) -> dict:
+        """Return database statistics.
+
+        Returns:
+            A dictionary with ``client_count``, ``quote_count``, and ``database_file`` keys.
+        """
+        try:
+            with self.Session() as session:
+                client_count = session.query(Client).count()
+                quote_count = session.query(Quote).count()
+        except Exception:
+            client_count = -1
+            quote_count = -1
+        return {"client_count": client_count, "quote_count": quote_count, "database_file": self.db_url}
+
     def get_all_quote_ids(self) -> List[str]:
         """Return every quote ID currently stored in the database.
 

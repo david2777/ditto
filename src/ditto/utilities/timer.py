@@ -7,3 +7,6 @@ class Timer:
 
     def get_elapsed_time(self, precision: int = 4) -> float:
         return round(perf_counter() - self.start, precision)
+
+    def get_elapsed_time_ms(self) -> float:
+        return (perf_counter() - self.start) * 1000
