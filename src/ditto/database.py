@@ -149,6 +149,24 @@ class QuoteManager:
             
             session.commit()
 
+    def get_all_quote_ids(self) -> List[str]:
+        """Get all quote IDs currently in the database."""
+        with self.Session() as session:
+            return list(session.scalars(select(Quote.id)).all())
+
+    def delete_quote(self, quote_id: str):
+        """Delete a quote by ID."""
+        from sqlalchemy import delete
+        with self.Session() as session:
+            quote = session.get(Quote, quote_id)
+            if quote:
+                # Delete any client sequences referencing this quote
+                session.execute(delete(ClientSequence).where(ClientSequence.quote_id == quote_id))
+                
+                session.delete(quote)
+                session.commit()
+                logger.info(f"Deleted quote {quote_id}")
+
     def register_client(self, client_name: str):
         with self.Session() as session:
             # Check if client exists

@@ -50,7 +50,7 @@ async def api_request(api_func: Callable, *args, max_retries: int = 5, initial_b
 
 
 async def fetch_image_block(page_id: str) -> Optional[dict]:
-    """Return the first image block from a page."""
+    """Return the first image block from a page. Note that this is just the image block, not the actual image."""
     try:
         blocks = await api_request(notion_api.blocks.children.list, page_id)
     except APIResponseError as error:
@@ -140,6 +140,7 @@ async def sync_notion_db(quote_manager):
     
     synced_count = 0
     skipped_count = 0
+    active_ids = set()
 
     for page in raw_pages:
         # Check simple filters (not archived, not in trash)
@@ -155,25 +156,17 @@ async def sync_notion_db(quote_manager):
                 
         if not is_active:
             skipped_count += 1
-            # We might want to remove it from DB if it exists, or mark inactive.
-            # For now, we just don't upsert it.
             continue
             
-        # Fetch image block if needed
-        # Optimization: We could delay this or only do it if we suspect image changed? 
-        # But Notion URLs expire, so getting a fresh block is good. 
-        # However, doing this for EVERY page might be slow (N extra requests).
-        # But per the original code, it seemed to fetch it on demand or during object creation.
-        # Let's fetch it to get the latest URL.
+        # Fetch image block which contains the image URL and expiry time
         image_block = await fetch_image_block(page['id'])
         
         notion_page = NotionPage(page, image_block)
         
         # Upsert into QuoteManager
-        # We need to construct the data expected by QuoteManager.upsert_quote
         quote_data = {
-            "id": notion_page.page_id, # Use Notion ID as PK or separate?
-            "db_id": notion_page.page_id, # keeping db_id as Notion ID
+            "id": notion_page.page_id,
+            "db_id": notion_page.page_id,
             "content": notion_page.quote,
             "title": notion_page.title,
             "author": notion_page.author,
@@ -182,6 +175,16 @@ async def sync_notion_db(quote_manager):
         }
         
         quote_manager.upsert_quote(quote_data)
+        active_ids.add(notion_page.page_id)
         synced_count += 1
 
-    logger.info(f"Sync complete. Synced: {synced_count}, Skipped: {skipped_count}")
+    # Cleanup: Remove quotes from DB that are not in active_ids
+    existing_ids = set(quote_manager.get_all_quote_ids())
+    to_delete = existing_ids - active_ids
+    
+    deleted_count = 0
+    for quote_id in to_delete:
+        quote_manager.delete_quote(quote_id)
+        deleted_count += 1
+
+    logger.info(f"Sync complete. Synced: {synced_count}, Skipped: {skipped_count}, Deleted: {deleted_count}")
