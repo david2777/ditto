@@ -1,6 +1,7 @@
 """
 Based on https://github.com/pimoroni/inky-frame/blob/main/modules/inky_frame.py
 """
+
 from pimoroni import ShiftRegister, PWMLED
 from machine import Pin, I2C, RTC
 from wakeup import get_shift_state, reset_shift_state
@@ -52,12 +53,12 @@ vsys.on()
 
 
 def woken_by_rtc():
-    mask = (1 << RTC_ALARM)
+    mask = 1 << RTC_ALARM
     return bool(sr.read() & mask) or bool(SHIFT_STATE & mask)
 
 
 def woken_by_ext_trigger():
-    mask = (1 << EXTERNAL_TRIGGER)
+    mask = 1 << EXTERNAL_TRIGGER
     return bool(sr.read() & mask) or bool(SHIFT_STATE & mask)
 
 
@@ -83,7 +84,7 @@ def pcf_to_pico_rtc():
 
 
 def sleep_for(minutes):
-    print('Sleeping for {} minutes'.format(minutes))
+    print("Sleeping for {} minutes".format(minutes))
     year, month, day, hour, minute, second, dow = rtc.datetime()
 
     # if the time is very close to the end of the minute, advance to the next minute
@@ -111,7 +112,7 @@ def sleep_for(minutes):
     turn_off()
 
     # Simulate sleep while on USB power
-    print('USB power detected, entering sleep loop...')
+    print("USB power detected, entering sleep loop...")
     while minutes > 0:
         time.sleep(60)
         minutes -= 1

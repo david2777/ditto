@@ -15,3 +15,18 @@ dependencies = [
     "uvicorn>=0.40.0",
     "wand>=0.6.13",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Add basic rules: E (pycodestyle errors) and F (Pyflakes).
+select = ["E", "F"]
+ignore = []
+
+[tool.ruff.format]
+# specific formatting options if needed, otherwise it inherits line-length
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"

@@ -1,6 +1,7 @@
 """
 Based on https://github.com/pimoroni/inky-frame/blob/main/examples/inkylauncher/inky_helper.py with some modifications of my own.
 """
+
 import os
 import gc
 import math
@@ -12,13 +13,16 @@ from machine import Pin, PWM, Timer
 from pimoroni_i2c import PimoroniI2C
 
 import inky_frame
-WIFI_STATUS_CODES = {-3: "STAT_WRONG_PASSWORD - Wrong password",
-                     -2: "STAT_NO_AP_FOUND - No access point replied",
-                     -1: "STAT_CONNECT_FAIL - Connection failed",
-                     0: "STAT_IDLE - Idle state",
-                     1: "STAT_CONNECTING - Connecting",
-                     2: "STAT_NO_IP - Connected, waiting for IP",
-                     3: "STAT_GOT_IP - Connection successful (has IP address)"}
+
+WIFI_STATUS_CODES = {
+    -3: "STAT_WRONG_PASSWORD - Wrong password",
+    -2: "STAT_NO_AP_FOUND - No access point replied",
+    -1: "STAT_CONNECT_FAIL - Connection failed",
+    0: "STAT_IDLE - Idle state",
+    1: "STAT_CONNECTING - Connecting",
+    2: "STAT_NO_IP - Connected, waiting for IP",
+    3: "STAT_GOT_IP - Connection successful (has IP address)",
+}
 
 
 # Pin setup for VSYS_HOLD needed to sleep and wake.
@@ -40,6 +44,7 @@ network_led_pwm.duty_u16(0)
 
 network_led_timer = Timer(-1)
 network_led_pulse_speed_hz = 1
+
 
 # set the brightness of the network led
 def network_led(brightness):
@@ -73,7 +78,7 @@ def stop_network_led():
 
 def sleep(t):
     # Time to have a little nap until the next update
-    print('Sleeping for {} minutes'.format(t))
+    print("Sleeping for {} minutes".format(t))
     rtc.clear_timer_flag()
     rtc.set_timer(t, ttp=rtc.TIMER_TICK_1_OVER_60HZ)
     rtc.enable_timer_interrupt(True)
@@ -114,16 +119,16 @@ def is_internet_connected(host="8.8.8.8", port=53, timeout=3, max_attempts=3):
     while attempt < max_attempts:
         attempt += 1
         try:
-            print('[{}/{}] Attempting to connect to {}:{}'.format(attempt, max_attempts, host, port))
+            print("[{}/{}] Attempting to connect to {}:{}".format(attempt, max_attempts, host, port))
             sock.connect((host, port))
-            print('Connected!')
+            print("Connected!")
             sock.close()
             gc.collect()
             return True
         except OSError:
             pass
 
-    print('Unable to connect to {}:{}'.format(host, port))
+    print("Unable to connect to {}:{}".format(host, port))
     sock.close()
     gc.collect()
     return False
@@ -169,7 +174,9 @@ def network_connect(ssid, psk, max_attempts=100):
             else:
                 sleep_time = 10
 
-            print(f'[{i}/{max_attempts}] ✗ Connection failed with status: {status} "{WIFI_STATUS_CODES.get(status, 'Unknown')}", waiting {sleep_time} seconds')
+            print(
+                f'[{i}/{max_attempts}] ✗ Connection failed with status: {status} "{WIFI_STATUS_CODES.get(status, "Unknown")}", waiting {sleep_time} seconds'
+            )
 
             if status <= 0:
                 wlan.connect(ssid, psk)

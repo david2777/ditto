@@ -4,8 +4,14 @@ from wand.image import Image
 from ditto import text_rendering
 
 
-def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
-                  quote: str, title: str, author: str) -> bool:
+def process_image(
+    raw_path: str,
+    output_path: str,
+    dimensions: tuple[int, int],
+    quote: str,
+    title: str,
+    author: str,
+) -> bool:
     """Processes an image by performing resizing, cropping, color adjustments,
     sharpening, dithering, adding text, and saving the output.
 
@@ -15,21 +21,19 @@ def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
     to a specified path.
 
     Args:
-        raw_path (str): Path to the input raw image file.
-        output_path (str): Path where the processed image will be saved.
-        dimensions (tuple[int, int]): Target dimensions (width, height) for
-            the output image.
-        quote (str): Quote to be added as a text overlay on the image.
-        title (str): Title to go with the quote.
-        author (str): Author name to be included with the quote and title.
+        raw_path: Path to the input raw image file.
+        output_path: Path where the processed image will be saved.
+        dimensions: Target dimensions (width, height) for the output image.
+        quote: Quote to be added as a text overlay on the image.
+        title: Title to go with the quote.
+        author: Author name to be included with the quote and title.
 
     Returns:
-        bool: True if the image processing and saving operation completes
-        successfully.
+        True if the image processing and saving operation completes successfully.
     """
     with Image(filename=raw_path) as img:
-        if img.colorspace != 'srgb':
-            img.transform_colorspace('srgb')
+        if img.colorspace != "srgb":
+            img.transform_colorspace("srgb")
 
         # 1. RESIZE & CROP: Resize to the target dimensions, then crop to center.
         orig_width = img.width
@@ -49,7 +53,7 @@ def process_image(raw_path: str, output_path: str, dimensions: tuple[int, int],
         logger.debug(f"Original {orig_width}x{orig_height} resized to {new_width}x{new_height} before cropping")
         img.resize(new_width, new_height)
 
-        img.gravity = 'center'  # Use 'center' gravity
+        img.gravity = "center"  # Use 'center' gravity
         img.crop(width=dimensions[0], height=dimensions[1])
 
         logger.info(f"Cropped to {img.width}x{img.height}")

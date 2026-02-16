@@ -1,5 +1,5 @@
 import asyncio
-from typing import *
+from typing import Any, Callable, List, Optional
 from pathlib import Path
 from datetime import datetime
 
@@ -22,7 +22,21 @@ rate_limit_event.set()
 
 
 async def api_request(api_func: Callable, *args, max_retries: int = 5, initial_backoff: int = 1, **kwargs) -> Any:
-    """Make a Notion API request with automatic retry on rate limit errors."""
+    """Make a Notion API request with automatic retry on rate limit errors.
+
+    Args:
+        api_func: The Notion API function to call.
+        *args: Positional arguments to pass to the API function.
+        max_retries: Maximum number of retries on rate limit errors.
+        initial_backoff: Initial backoff time in seconds.
+        **kwargs: Keyword arguments to pass to the API function.
+
+    Returns:
+        The response from the API function.
+
+    Raises:
+        NotionError: If the API request fails after all retries.
+    """
     retries = 0
     backoff = initial_backoff
 
@@ -50,21 +64,34 @@ async def api_request(api_func: Callable, *args, max_retries: int = 5, initial_b
 
 
 async def fetch_image_block(page_id: str) -> Optional[dict]:
-    """Return the first image block from a page. Note that this is just the image block, not the actual image."""
+    """Return the first image block from a page. Note that this is just the image block, not the actual image.
+
+    Args:
+        page_id: The ID of the page to fetch the image block from.
+
+    Returns:
+        The image block from the page.
+    """
     try:
         blocks = await api_request(notion_api.blocks.children.list, page_id)
     except APIResponseError as error:
         logger.exception(error)
-        blocks = {'results': []}
+        blocks = {"results": []}
 
-    for block in blocks['results']:
-        if block['type'] == 'image':
-            return block['image']
+    for block in blocks["results"]:
+        if block["type"] == "image":
+            return block["image"]
     return None
 
 
 class NotionPage:
-    """Represents a processed page from Notion."""
+    """Represents a processed page from Notion.
+
+    Args:
+        page: The page data from Notion.
+        image_block: The image block from the page.
+    """
+
     page_id: str
     quote: str
     title: str
@@ -73,40 +100,47 @@ class NotionPage:
     image_expiry_time: Optional[datetime]
 
     def __init__(self, page: dict, image_block: Optional[dict] = None):
-        self.page_id = page['id']
-        quote = ''
+        self.page_id = page["id"]
+        quote = ""
         # Safely extract title
-        if 'Name' in page['properties'] and 'title' in page['properties']['Name']:
-            for part in page['properties']['Name']['title']:
-                quote += part['plain_text']
+        if "Name" in page["properties"] and "title" in page["properties"]["Name"]:
+            for part in page["properties"]["Name"]["title"]:
+                quote += part["plain_text"]
         self.quote = quote
 
         self.title = "Unknown"
-        if 'TITLE' in page['properties'] and page['properties']['TITLE']['rich_text']:
-            self.title = page['properties']['TITLE']['rich_text'][0]['plain_text']
+        if "TITLE" in page["properties"] and page["properties"]["TITLE"]["rich_text"]:
+            self.title = page["properties"]["TITLE"]["rich_text"][0]["plain_text"]
 
         self.author = "Unknown"
-        if 'AUTHOR' in page['properties'] and page['properties']['AUTHOR']['rich_text']:
-            self.author = page['properties']['AUTHOR']['rich_text'][0]['plain_text']
+        if "AUTHOR" in page["properties"] and page["properties"]["AUTHOR"]["rich_text"]:
+            self.author = page["properties"]["AUTHOR"]["rich_text"][0]["plain_text"]
 
         self.image_url = None
         self.image_expiry_time = None
 
         if image_block:
-            if image_block['type'] == 'file':
-                self.image_url = image_block['file']['url']
-                self.image_expiry_time = datetime.fromisoformat(image_block['file']['expiry_time'])
-            elif image_block['type'] == 'external':
-                self.image_url = image_block['external']['url']
+            if image_block["type"] == "file":
+                self.image_url = image_block["file"]["url"]
+                self.image_expiry_time = datetime.fromisoformat(image_block["file"]["expiry_time"])
+            elif image_block["type"] == "external":
+                self.image_url = image_block["external"]["url"]
                 self.image_expiry_time = None
 
     def __repr__(self):
-        return f'NotionPage[{self.page_id}]'
+        return f"NotionPage[{self.page_id}]"
 
 
 async def fetch_all_pages(database_id: str) -> List[dict]:
-    """Fetch all pages from the Notion database."""
-    logger.info(f'Fetching all pages from database {database_id}...')
+    """Fetch all pages from the Notion database.
+
+    Args:
+        database_id: The ID of the database to fetch pages from.
+
+    Returns:
+        A list of page data from the database.
+    """
+    logger.info(f"Fetching all pages from database {database_id}...")
     try:
         response = await api_request(notion_api.databases.query, database_id=database_id)
     except APIResponseError as error:
@@ -116,28 +150,28 @@ async def fetch_all_pages(database_id: str) -> List[dict]:
     results = response["results"]
     while response["has_more"]:
         try:
-            response = await api_request(notion_api.databases.query, database_id=database_id,
-                                         start_cursor=response["next_cursor"])
+            response = await api_request(
+                notion_api.databases.query, database_id=database_id, start_cursor=response["next_cursor"]
+            )
             results.extend(response["results"])
         except APIResponseError as error:
             logger.exception(error)
             break
-            
-    logger.info(f'Fetched {len(results)} raw pages.')
+
+    logger.info(f"Fetched {len(results)} raw pages.")
     return results
 
 
 async def sync_notion_db(quote_manager):
-    """
-    Syncs Notion data to the SQLite database via QuoteManager.
-    
+    """Syncs Notion data to the SQLite database via QuoteManager.
+
     Args:
         quote_manager: Instance of QuoteManager (from ditto.database)
     """
     logger.info("Starting Notion sync...")
-    
+
     raw_pages = await fetch_all_pages(credentials.settings.notion_database_id)
-    
+
     synced_count = 0
     skipped_count = 0
     active_ids = set()
@@ -148,21 +182,21 @@ async def sync_notion_db(quote_manager):
         is_active = True
         if page.get("archived") or page.get("in_trash"):
             is_active = False
-        
+
         # Check DISPLAY checkbox if it exists
-        if 'DISPLAY' in page['properties'] and 'checkbox' in page['properties']['DISPLAY']:
-            if not page['properties']['DISPLAY']['checkbox']:
+        if "DISPLAY" in page["properties"] and "checkbox" in page["properties"]["DISPLAY"]:
+            if not page["properties"]["DISPLAY"]["checkbox"]:
                 is_active = False
-                
+
         if not is_active:
             skipped_count += 1
             continue
-            
+
         # Fetch image block which contains the image URL and expiry time
-        image_block = await fetch_image_block(page['id'])
-        
+        image_block = await fetch_image_block(page["id"])
+
         notion_page = NotionPage(page, image_block)
-        
+
         # Upsert into QuoteManager
         quote_data = {
             "id": notion_page.page_id,
@@ -171,9 +205,9 @@ async def sync_notion_db(quote_manager):
             "title": notion_page.title,
             "author": notion_page.author,
             "image_url": notion_page.image_url,
-            "image_expiry": notion_page.image_expiry_time
+            "image_expiry": notion_page.image_expiry_time,
         }
-        
+
         quote_manager.upsert_quote(quote_data)
         active_ids.add(notion_page.page_id)
         synced_count += 1
@@ -181,7 +215,7 @@ async def sync_notion_db(quote_manager):
     # Cleanup: Remove quotes from DB that are not in active_ids
     existing_ids = set(quote_manager.get_all_quote_ids())
     to_delete = existing_ids - active_ids
-    
+
     deleted_count = 0
     for quote_id in to_delete:
         quote_manager.delete_quote(quote_id)

@@ -1,5 +1,6 @@
 from time import perf_counter
 
+
 class Timer:
     def __init__(self):
         self.start = perf_counter()
